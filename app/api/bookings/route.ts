@@ -27,9 +27,11 @@ export async function POST(request: Request) {
     const [capacity] = await sql`
       SELECT COALESCE(sum(party_size), 0)::int AS covers
       FROM reservations
-      WHERE booking_date = ${date}::date AND booking_time = ${time}::time AND status NOT IN ('cancelled', 'no_show')
+      WHERE booking_date = ${date}::date
+        AND EXTRACT(HOUR FROM booking_time) = ${Number(time.slice(0, 2))}
+        AND status NOT IN ('cancelled', 'no_show')
     `;
-    if (Number(capacity.covers) + partySize > settings.maxCoversPerSlot) {
+    if (Number(capacity.covers) + partySize > settings.maxCoversPerHour) {
       return Response.json({ error: "That time has just filled up. Please choose another time." }, { status: 409 });
     }
     let reference = makeReference();

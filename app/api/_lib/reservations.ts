@@ -1,10 +1,11 @@
 import { neon } from "@neondatabase/serverless";
 
-export type DayHours = { enabled: boolean; open: string; close: string };
+export type ServicePeriod = { open: string; close: string };
+export type DayHours = { enabled: boolean; periods: ServicePeriod[] };
 export type BookingSettings = {
   enabled: boolean;
   slotMinutes: number;
-  maxCoversPerSlot: number;
+  maxCoversPerHour: number;
   maxPartySize: number;
   bookingWindowDays: number;
   hours: DayHours[];
@@ -13,10 +14,14 @@ export type BookingSettings = {
 export const defaultSettings: BookingSettings = {
   enabled: false,
   slotMinutes: 30,
-  maxCoversPerSlot: 0,
+  maxCoversPerHour: 0,
   maxPartySize: 0,
   bookingWindowDays: 60,
-  hours: Array.from({ length: 7 }, () => ({ enabled: false, open: "11:30", close: "21:00" })),
+  hours: [
+    { enabled: true, periods: [{ open: "11:30", close: "14:00" }, { open: "17:00", close: "20:30" }] },
+    ...Array.from({ length: 5 }, () => ({ enabled: true, periods: [{ open: "17:00", close: "20:30" }] })),
+    { enabled: true, periods: [{ open: "11:30", close: "14:00" }, { open: "17:00", close: "20:30" }] },
+  ],
 };
 
 export function getSql() {
@@ -81,13 +86,15 @@ export function slotsForDate(settings: BookingSettings, date: string) {
   const day = new Date(`${date}T12:00:00+10:00`).getDay();
   const hours = settings.hours[day];
   if (!settings.enabled || !hours?.enabled) return [];
-  const start = minutes(hours.open);
-  const end = minutes(hours.close);
   const result: string[] = [];
-  for (let value = start; value <= end; value += settings.slotMinutes) {
-    result.push(`${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`);
+  for (const period of hours.periods) {
+    const start = minutes(period.open);
+    const end = minutes(period.close);
+    for (let value = start; value <= end; value += settings.slotMinutes) {
+      result.push(`${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`);
+    }
   }
-  return result;
+  return [...new Set(result)].sort();
 }
 
 export function makeReference() {

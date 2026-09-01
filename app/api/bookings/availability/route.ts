@@ -11,15 +11,15 @@ export async function GET(request: Request) {
     if (!baseSlots.length) return Response.json({ enabled: settings.enabled, slots: [], maxPartySize: settings.maxPartySize });
     const sql = await ensureReservationSchema();
     const rows = await sql`
-      SELECT to_char(booking_time, 'HH24:MI') AS time, COALESCE(sum(party_size), 0)::int AS covers
+      SELECT EXTRACT(HOUR FROM booking_time)::int AS hour, COALESCE(sum(party_size), 0)::int AS covers
       FROM reservations
       WHERE booking_date = ${date}::date AND status NOT IN ('cancelled', 'no_show')
-      GROUP BY booking_time
+      GROUP BY EXTRACT(HOUR FROM booking_time)
     `;
-    const used = new Map(rows.map((row) => [String(row.time), Number(row.covers)]));
+    const used = new Map(rows.map((row) => [Number(row.hour), Number(row.covers)]));
     const slots = baseSlots.map((time) => ({
       time,
-      remaining: Math.max(0, settings.maxCoversPerSlot - (used.get(time) || 0)),
+      remaining: Math.max(0, settings.maxCoversPerHour - (used.get(Number(time.slice(0, 2))) || 0)),
     }));
     return Response.json({ enabled: settings.enabled, slots, maxPartySize: settings.maxPartySize });
   } catch (error) {
