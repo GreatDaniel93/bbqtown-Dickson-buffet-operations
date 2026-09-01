@@ -12,10 +12,10 @@ export type BookingSettings = {
 };
 
 export const defaultSettings: BookingSettings = {
-  enabled: false,
+  enabled: true,
   slotMinutes: 30,
-  maxCoversPerHour: 0,
-  maxPartySize: 0,
+  maxCoversPerHour: 40,
+  maxPartySize: 40,
   bookingWindowDays: 60,
   hours: [
     { enabled: true, periods: [{ open: "11:30", close: "14:00" }, { open: "17:00", close: "20:30" }] },
