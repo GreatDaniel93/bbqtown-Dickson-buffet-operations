@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { authorized } from "../_lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +43,15 @@ export async function POST(request: Request) {
     if (!Array.isArray(body.foods) || body.foods.length < 1 || body.foods.length > 200 || !Array.isArray(body.logs)) {
       return Response.json({ error: "Invalid buffet state" }, { status: 400 });
     }
+    const sql = await ensureSchema();
+    const [current] = await sql`SELECT payload FROM buffet_state WHERE id = 1`;
+    const priorPayload = current?.payload;
+    const priorFoods = typeof priorPayload === "string" ? JSON.parse(priorPayload).foods : priorPayload?.foods;
+    if (Array.isArray(priorFoods) && priorFoods.length !== body.foods.length && !authorized(request)) {
+      return Response.json({ error: "Manager authorization is required to add or remove dishes" }, { status: 401 });
+    }
     const updatedAt = Date.now();
     const payload = JSON.stringify({ foods: body.foods, logs: body.logs.slice(0, 1000) });
-    const sql = await ensureSchema();
     await sql`
       INSERT INTO buffet_state (id, payload, updated_at)
       VALUES (1, ${payload}::jsonb, ${updatedAt})
