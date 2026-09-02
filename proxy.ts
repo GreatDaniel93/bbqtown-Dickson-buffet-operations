@@ -5,6 +5,7 @@ const PUBLIC_PATHS = new Set([
   "/book",
   "/book.html",
   "/staff-login",
+  "/staff-login/submit",
   "/api/admin/auth",
   "/manifest.webmanifest",
   "/sw.js",
