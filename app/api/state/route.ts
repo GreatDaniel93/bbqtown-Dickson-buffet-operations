@@ -39,7 +39,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { foods?: unknown[]; logs?: unknown[] };
-    if (!Array.isArray(body.foods) || body.foods.length !== 56 || !Array.isArray(body.logs)) {
+    if (!Array.isArray(body.foods) || body.foods.length < 1 || body.foods.length > 200 || !Array.isArray(body.logs)) {
       return Response.json({ error: "Invalid buffet state" }, { status: 400 });
     }
     const updatedAt = Date.now();
