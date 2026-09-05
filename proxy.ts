@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 const PUBLIC_PATHS = new Set([
   "/book",
   "/book.html",
+  "/voucher",
   "/staff-login",
   "/staff-login/submit",
   "/api/admin/auth",
@@ -35,7 +36,7 @@ async function hasStaffSession(request: NextRequest) {
 }
 
 function isPublic(pathname: string) {
-  return PUBLIC_PATHS.has(pathname) || pathname === "/api/bookings" || pathname.startsWith("/api/bookings/");
+  return PUBLIC_PATHS.has(pathname) || pathname === "/api/vouchers/claim" || pathname === "/api/bookings" || pathname.startsWith("/api/bookings/");
 }
 
 export async function proxy(request: NextRequest) {
