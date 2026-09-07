@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { configured, loginCookie, verifyPin } from "../../api/_lib/admin-auth";
 
 function safeNext(value: FormDataEntryValue | null) {
-  const path = typeof value === "string" ? value : "/";
-  return path.startsWith("/") && !path.startsWith("//") ? path : "/";
+  const path = typeof value === "string" ? value : "/ops.html";
+  if (path === "/") return "/ops.html";
+  return path.startsWith("/") && !path.startsWith("//") ? path : "/ops.html";
 }
 
 export async function POST(request: Request) {
