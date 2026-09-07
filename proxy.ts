@@ -7,6 +7,8 @@ const PUBLIC_PATHS = new Set([
   "/voucher",
   "/street-voucher-poster.html",
   "/bbqtown-logo.png",
+  "/robots.txt",
+  "/sitemap.xml",
   "/staff-login",
   "/staff-login/submit",
   "/api/admin/auth",
@@ -16,6 +18,14 @@ const PUBLIC_PATHS = new Set([
   "/file.svg",
   "/globe.svg",
   "/window.svg",
+]);
+
+const PUBLIC_BOOKING_IMAGES = new Set([
+  "/images/bbq-meat-display.jpg",
+  "/images/bbq-sides.jpg",
+  "/images/bbq-selection.jpg",
+  "/images/bbq-hot-food.jpg",
+  "/images/bbq-fried-food.jpg",
 ]);
 
 function hex(bytes: ArrayBuffer) {
@@ -38,7 +48,7 @@ async function hasStaffSession(request: NextRequest) {
 }
 
 function isPublic(pathname: string) {
-  return PUBLIC_PATHS.has(pathname) || pathname === "/api/vouchers/claim" || pathname === "/api/bookings" || pathname.startsWith("/api/bookings/");
+  return PUBLIC_PATHS.has(pathname) || PUBLIC_BOOKING_IMAGES.has(pathname) || pathname === "/api/vouchers/claim" || pathname === "/api/bookings" || pathname.startsWith("/api/bookings/");
 }
 
 export async function proxy(request: NextRequest) {
