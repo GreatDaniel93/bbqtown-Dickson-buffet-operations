@@ -17,13 +17,20 @@ export async function ensureVoucherSchema() {
       code text UNIQUE NOT NULL,
       voucher_date date NOT NULL,
       amount_cents integer NOT NULL DEFAULT 1000,
+      discount_percent integer NOT NULL DEFAULT 10,
       status text NOT NULL DEFAULT 'issued',
       claim_key text,
       issued_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL DEFAULT (now() + interval '14 days'),
       redeemed_at timestamptz,
       redeemed_by text
     )
   `;
-  await sql`CREATE INDEX IF NOT EXISTS street_vouchers_lookup_idx ON street_vouchers (code, voucher_date, status)`;
+  await sql`ALTER TABLE street_vouchers ADD COLUMN IF NOT EXISTS discount_percent integer NOT NULL DEFAULT 10`;
+  await sql`ALTER TABLE street_vouchers ADD COLUMN IF NOT EXISTS expires_at timestamptz`;
+  await sql`UPDATE street_vouchers SET expires_at = issued_at + interval '14 days' WHERE expires_at IS NULL`;
+  await sql`ALTER TABLE street_vouchers ALTER COLUMN expires_at SET DEFAULT (now() + interval '14 days')`;
+  await sql`ALTER TABLE street_vouchers ALTER COLUMN expires_at SET NOT NULL`;
+  await sql`CREATE INDEX IF NOT EXISTS street_vouchers_active_idx ON street_vouchers (code, status, expires_at)`;
   return sql;
 }
