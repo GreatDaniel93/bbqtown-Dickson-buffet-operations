@@ -1,5 +1,5 @@
 import { authorized } from "../../_lib/admin-auth";
-import { ensureVoucherSchema, voucherDate } from "../../_lib/vouchers";
+import { ensureVoucherSchema } from "../../_lib/vouchers";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,11 @@ export async function POST(request: Request) {
     const [row] = await sql`
       UPDATE street_vouchers
       SET status = 'redeemed', redeemed_at = now(), redeemed_by = ${String(staff || "Staff")}
-      WHERE code = ${clean} AND voucher_date = ${voucherDate()} AND status = 'issued'
-      RETURNING code, voucher_date, redeemed_at
+      WHERE code = ${clean} AND expires_at > now() AND status = 'issued'
+      RETURNING code, discount_percent, expires_at, redeemed_at
     `;
     if (!row) return Response.json({ error: "Voucher is invalid, expired, or already redeemed" }, { status: 409 });
-    return Response.json({ ok: true, code: row.code, amount: 10, redeemedAt: row.redeemed_at });
+    return Response.json({ ok: true, code: row.code, discountPercent: row.discount_percent, expiresAt: row.expires_at, redeemedAt: row.redeemed_at });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to redeem voucher" }, { status: 500 });
   }
