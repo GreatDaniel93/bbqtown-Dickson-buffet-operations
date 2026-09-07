@@ -10,7 +10,7 @@ export async function POST() {
     const date = voucherDate();
     const sql = await ensureVoucherSchema();
     const [existing] = await sql`
-      SELECT code, voucher_date, issued_at, expires_at, discount_percent
+      SELECT code, voucher_date, issued_at, valid_from, expires_at, discount_percent
       FROM street_vouchers
       WHERE claim_key = ${key} AND status = 'issued' AND expires_at > now()
       ORDER BY issued_at DESC
@@ -22,9 +22,12 @@ export async function POST() {
       const [created] = await sql`
         WITH daily_lock AS (SELECT pg_advisory_xact_lock(hashtext(${date}))),
         issued AS (SELECT count(*)::int AS count FROM street_vouchers, daily_lock WHERE voucher_date = ${date})
-        INSERT INTO street_vouchers (code, voucher_date, claim_key, discount_percent, expires_at)
-        SELECT ${candidate}, ${date}, ${key}, 10, now() + interval '14 days' FROM issued WHERE count < 100
-        RETURNING code, voucher_date, issued_at, expires_at, discount_percent
+        INSERT INTO street_vouchers (code, voucher_date, claim_key, discount_percent, valid_from, expires_at)
+        SELECT ${candidate}, ${date}, ${key}, 10,
+          (((${date}::date + 1)::timestamp) AT TIME ZONE 'Australia/Sydney'),
+          now() + interval '14 days'
+        FROM issued WHERE count < 100
+        RETURNING code, voucher_date, issued_at, valid_from, expires_at, discount_percent
       `;
       if (!created) return Response.json({ error: "All 100 street vouchers for today have been claimed. Please try again tomorrow." }, { status: 429 });
       voucher = created;
@@ -32,6 +35,7 @@ export async function POST() {
     const response = Response.json({
       code: voucher.code,
       issuedAt: voucher.issued_at,
+      validFrom: voucher.valid_from,
       expiresAt: voucher.expires_at,
       discountPercent: voucher.discount_percent,
       status: "issued",
