@@ -15,6 +15,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-AU", {
   day: "numeric",
   month: "short",
   year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
 });
 
 export default function VoucherPage() {
