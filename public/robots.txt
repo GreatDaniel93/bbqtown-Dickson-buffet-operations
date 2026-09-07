@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /book.html
+Allow: /voucher
+Allow: /street-voucher-poster.html
+Disallow: /ops.html
+Disallow: /tables.html
+Disallow: /reservations
+Disallow: /vouchers
+Disallow: /staff-login
+
+Sitemap: https://bbqtowndickson.vercel.app/sitemap.xml
