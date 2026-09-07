@@ -1,7 +1,8 @@
 type SearchParams = Promise<{ next?: string; error?: string }>;
 
 function safeNext(value?: string) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+  if (!value || value === "/") return "/ops.html";
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/ops.html";
 }
 
 export default async function StaffLoginPage({ searchParams }: { searchParams: SearchParams }) {
