@@ -21,16 +21,21 @@ export async function ensureVoucherSchema() {
       status text NOT NULL DEFAULT 'issued',
       claim_key text,
       issued_at timestamptz NOT NULL DEFAULT now(),
+      valid_from timestamptz NOT NULL DEFAULT (((now() AT TIME ZONE 'Australia/Sydney')::date + 1) AT TIME ZONE 'Australia/Sydney'),
       expires_at timestamptz NOT NULL DEFAULT (now() + interval '14 days'),
       redeemed_at timestamptz,
       redeemed_by text
     )
   `;
   await sql`ALTER TABLE street_vouchers ADD COLUMN IF NOT EXISTS discount_percent integer NOT NULL DEFAULT 10`;
+  await sql`ALTER TABLE street_vouchers ADD COLUMN IF NOT EXISTS valid_from timestamptz`;
+  await sql`UPDATE street_vouchers SET valid_from = ((voucher_date + 1)::timestamp AT TIME ZONE 'Australia/Sydney') WHERE valid_from IS NULL`;
+  await sql`ALTER TABLE street_vouchers ALTER COLUMN valid_from SET DEFAULT (((now() AT TIME ZONE 'Australia/Sydney')::date + 1) AT TIME ZONE 'Australia/Sydney')`;
+  await sql`ALTER TABLE street_vouchers ALTER COLUMN valid_from SET NOT NULL`;
   await sql`ALTER TABLE street_vouchers ADD COLUMN IF NOT EXISTS expires_at timestamptz`;
   await sql`UPDATE street_vouchers SET expires_at = issued_at + interval '14 days' WHERE expires_at IS NULL`;
   await sql`ALTER TABLE street_vouchers ALTER COLUMN expires_at SET DEFAULT (now() + interval '14 days')`;
   await sql`ALTER TABLE street_vouchers ALTER COLUMN expires_at SET NOT NULL`;
-  await sql`CREATE INDEX IF NOT EXISTS street_vouchers_active_idx ON street_vouchers (code, status, expires_at)`;
+  await sql`CREATE INDEX IF NOT EXISTS street_vouchers_active_idx ON street_vouchers (code, status, valid_from, expires_at)`;
   return sql;
 }
