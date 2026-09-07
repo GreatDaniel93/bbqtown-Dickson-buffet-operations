@@ -7,6 +7,7 @@ const PUBLIC_PATHS = new Set([
   "/book.html",
   "/voucher",
   "/street-voucher-poster.html",
+  "/street-voucher-qr.svg",
   "/bbqtown-logo.png",
   "/robots.txt",
   "/sitemap.xml",
