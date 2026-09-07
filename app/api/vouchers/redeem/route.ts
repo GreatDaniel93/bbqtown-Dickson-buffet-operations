@@ -13,10 +13,27 @@ export async function POST(request: Request) {
     const [row] = await sql`
       UPDATE street_vouchers
       SET status = 'redeemed', redeemed_at = now(), redeemed_by = ${String(staff || "Staff")}
-      WHERE code = ${clean} AND expires_at > now() AND status = 'issued'
-      RETURNING code, discount_percent, expires_at, redeemed_at
+      WHERE code = ${clean} AND valid_from <= now() AND expires_at > now() AND status = 'issued'
+      RETURNING code, discount_percent, valid_from, expires_at, redeemed_at
     `;
-    if (!row) return Response.json({ error: "Voucher is invalid, expired, or already redeemed" }, { status: 409 });
+    if (!row) {
+      const [voucher] = await sql`
+        SELECT status, valid_from, expires_at, valid_from > now() AS not_yet_valid, expires_at <= now() AS expired
+        FROM street_vouchers
+        WHERE code = ${clean}
+        LIMIT 1
+      `;
+      if (voucher?.status === "issued" && voucher?.not_yet_valid) {
+        return Response.json({ error: "Voucher cannot be used on the day it is issued. It is valid from tomorrow.", validFrom: voucher.valid_from }, { status: 409 });
+      }
+      if (voucher?.status === "issued" && voucher?.expired) {
+        return Response.json({ error: "Voucher has expired" }, { status: 409 });
+      }
+      if (voucher?.status === "redeemed") {
+        return Response.json({ error: "Voucher has already been redeemed" }, { status: 409 });
+      }
+      return Response.json({ error: "Voucher is invalid" }, { status: 409 });
+    }
     return Response.json({ ok: true, code: row.code, discountPercent: row.discount_percent, expiresAt: row.expires_at, redeemedAt: row.redeemed_at });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to redeem voucher" }, { status: 500 });
