@@ -9,4 +9,4 @@ Disallow: /manage-booking.html
 Disallow: /vouchers
 Disallow: /staff-login
 
-Sitemap: https://bbqtowndickson.vercel.app/sitemap.xml
+Sitemap: https://bbqtowndickson.com/sitemap.xml
