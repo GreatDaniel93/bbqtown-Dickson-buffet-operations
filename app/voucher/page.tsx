@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 
 type Voucher = { code: string; issuedAt: string; validFrom: string; expiresAt: string; discountPercent: number };
 
-const REVIEW_URL = "https://www.google.com/maps/search/?api=1&query=BBQTOWN%20Dickson%206%2F28%20Challis%20St%20Dickson%20ACT%202602";
+const REVIEW_URL = "https://g.page/r/CUEVJmvZGEyeEAE/review";
 const WAIT_SECONDS = 20;
 const dayFormatter = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Sydney", day: "numeric", month: "short", year: "numeric" });
 const lastValidDay = (expiresAt: string) => new Date(new Date(expiresAt).getTime() - 1000);
@@ -57,7 +57,7 @@ export default function VoucherPage() {
       <p style={{color:"#566058",lineHeight:1.55,margin:"0 auto",maxWidth:380}}>Share your experience on Google, then come back here to claim 10% off your next visit.</p>
       {!voucher && <div style={{marginTop:24,padding:20,borderRadius:16,background:"white"}}>
         <div style={{fontSize:13,fontWeight:900,letterSpacing:1}}>STEP 1</div><h2 style={{margin:"8px 0",fontSize:23}}>Share your experience</h2>
-        <p style={{color:"#69736c",fontSize:14,lineHeight:1.5}}>Tap below to open BBQTOWN Dickson on Google. After posting your review, return to this page.</p>
+        <p style={{color:"#69736c",fontSize:14,lineHeight:1.5}}>Tap below to open BBQTOWN Dickson's Google review page. After posting your review, return to this page.</p>
         <a href={REVIEW_URL} target="_blank" rel="noopener noreferrer" onClick={markReviewStarted} style={{display:"grid",placeItems:"center",width:"100%",minHeight:58,borderRadius:12,background:"#2f7e54",color:"white",fontSize:17,fontWeight:900,textDecoration:"none"}}>LEAVE A GOOGLE REVIEW</a>
         {reviewStartedAt && <div style={{marginTop:22,paddingTop:20,borderTop:"1px solid #e2ded4"}}>
           <div style={{fontSize:13,fontWeight:900,letterSpacing:1}}>STEP 2</div><h2 style={{margin:"8px 0",fontSize:23}}>Claim your reward</h2>
