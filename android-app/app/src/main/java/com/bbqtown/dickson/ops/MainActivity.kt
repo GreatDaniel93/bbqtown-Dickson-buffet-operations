@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.net.ConnectivityManager
@@ -25,7 +26,9 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 
@@ -52,7 +55,8 @@ class MainActivity : Activity() {
             "/book",
             "/reservations",
             "/voucher",
-            "/vouchers"
+            "/vouchers",
+            "/staff"
         )
     }
 
@@ -148,34 +152,37 @@ class MainActivity : Activity() {
         connectionBadge = TextView(this).apply {
             textSize = 12f
             gravity = Gravity.CENTER
-            setPadding(18, 8, 18, 8)
+            setPadding(dp(14), dp(7), dp(14), dp(7))
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(46, 125, 73))
+            background = roundedBackground(Color.rgb(46, 125, 73), dp(16).toFloat())
             text = "ONLINE"
         }
 
         roleBadge = TextView(this).apply {
             textSize = 11f
             gravity = Gravity.CENTER
-            setPadding(16, 9, 16, 9)
+            setPadding(dp(14), dp(9), dp(14), dp(9))
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(23, 32, 24))
-            setOnClickListener { showRoleChooser(false) }
+            background = roundedBackground(Color.rgb(23, 32, 24), dp(10).toFloat())
+            setOnClickListener {
+                playClick()
+                showRoleChooser(false)
+            }
         }
 
         root.addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        root.addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 6))
+        root.addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(3)))
         root.addView(offlineMessage, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         root.addView(connectionBadge, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.TOP or Gravity.END
-            topMargin = 10
-            marginEnd = 10
+            topMargin = dp(10)
+            marginEnd = dp(10)
         })
         root.addView(roleBadge, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.BOTTOM or Gravity.END
-            bottomMargin = 12
-            marginEnd = 12
+            bottomMargin = dp(12)
+            marginEnd = dp(12)
         })
         setContentView(root)
 
@@ -190,7 +197,7 @@ class MainActivity : Activity() {
             builtInZoomControls = false
             displayZoomControls = false
             setSupportZoom(false)
-            userAgentString = "$userAgentString BBQTownOpsAndroid/1.2"
+            userAgentString = "$userAgentString BBQTownOpsAndroid/1.3"
         }
 
         webView.addJavascriptInterface(NativeOpsBridge(), "BBQNativeOps")
@@ -248,16 +255,17 @@ class MainActivity : Activity() {
               const role = ${jsString(role)};
               const hide = (el) => { if (el) el.style.setProperty('display','none','important'); };
               hide(document.getElementById('bookingLink'));
-              document.querySelectorAll('a[href="/vouchers"],a[href^="/voucher"],a[href^="/reservations"],a[href^="/book"]').forEach(hide);
+              document.querySelectorAll('a[href="/vouchers"],a[href^="/voucher"],a[href^="/reservations"],a[href^="/book"],a[href^="/staff"]').forEach(hide);
 
               const brand = document.getElementById('brandSub');
-              if (brand && !brand.textContent.includes('App')) brand.textContent = brand.textContent + ' · App';
+              if (brand) brand.textContent = 'Dickson · Ops App';
 
               if (location.pathname.endsWith('/ops.html') || location.pathname === '/ops.html') {
                 const target = document.querySelector('[data-view="' + role + '"]');
                 if (target && document.body.dataset.view !== role) target.click();
 
-                // Fix this device to its assigned operating role. The native DEVICE badge changes it.
+                // Lock each device to its assigned operating role. Role changes happen through
+                // the native DEVICE badge, not the browser navigation.
                 document.querySelectorAll('.nav [data-view]').forEach(btn => {
                   if (role && btn.getAttribute('data-view') !== role) hide(btn);
                 });
@@ -275,8 +283,7 @@ class MainActivity : Activity() {
                 }, true);
               }
 
-              // Kitchen new-task monitor. We watch the first kitchen column (new/unhandled work)
-              // and report the count to Android. Android handles the loud sound + vibration + repeats.
+              // Kitchen new-task monitor. Android handles loud sound, vibration and repeat alerts.
               if ((role === 's1' || role === 's2') && !window.__bbqKitchenMonitorInstalled) {
                 window.__bbqKitchenMonitorInstalled = true;
                 let lastCount = -1;
@@ -306,20 +313,102 @@ class MainActivity : Activity() {
     }
 
     private fun showRoleChooser(firstRun: Boolean) {
-        val labels = arrayOf("FOH Floor", "Kitchen Section 1", "Kitchen Section 2", "Manager", "Tables")
-        val roles = arrayOf("foh", "s1", "s2", "manager", "tables")
-        AlertDialog.Builder(this)
-            .setTitle(if (firstRun) "Set this device role" else "Change device role")
-            .setItems(labels) { _, which ->
-                currentRole = roles[which]
-                prefs.edit().putString(PREF_ROLE, currentRole).apply()
-                pendingKitchenTasks = 0
-                handler.removeCallbacks(repeatAlert)
-                updateRoleBadge()
-                loadRoleHome()
+        val dialog = AlertDialog.Builder(this).create()
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(22), dp(22), dp(18))
+            setBackgroundColor(Color.rgb(250, 250, 247))
+        }
+
+        val brand = TextView(this).apply {
+            text = "BBQ TOWN"
+            textSize = 24f
+            setTextColor(Color.rgb(23, 32, 24))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        container.addView(brand)
+
+        val title = TextView(this).apply {
+            text = if (firstRun) "Set this tablet" else "Change device role"
+            textSize = 19f
+            setTextColor(Color.rgb(23, 32, 24))
+            setPadding(0, dp(4), 0, 0)
+        }
+        container.addView(title)
+
+        val subtitle = TextView(this).apply {
+            text = "Choose what this device is used for. It will open directly to this workspace next time."
+            textSize = 13f
+            setTextColor(Color.rgb(101, 113, 105))
+            setPadding(0, dp(6), 0, dp(16))
+        }
+        container.addView(subtitle)
+
+        val choices = listOf(
+            Triple("foh", "FOH FLOOR", "Food status and floor operations"),
+            Triple("s1", "KITCHEN SECTION 1", "Kitchen production screen · Section 1"),
+            Triple("s2", "KITCHEN SECTION 2", "Kitchen production screen · Section 2"),
+            Triple("manager", "MANAGER", "Management controls and live overview"),
+            Triple("tables", "TABLES", "Table status and seating screen")
+        )
+
+        choices.forEach { (role, label, description) ->
+            val button = Button(this).apply {
+                text = "$label\n$description"
+                textSize = 14f
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                isAllCaps = false
+                setTextColor(Color.rgb(23, 32, 24))
+                setPadding(dp(16), dp(10), dp(16), dp(10))
+                background = roundedStrokeBackground(
+                    fill = if (role == currentRole) Color.rgb(235, 245, 238) else Color.WHITE,
+                    stroke = if (role == currentRole) Color.rgb(80, 145, 101) else Color.rgb(218, 225, 219),
+                    radius = dp(10).toFloat()
+                )
+                setOnClickListener {
+                    playClick()
+                    currentRole = role
+                    prefs.edit().putString(PREF_ROLE, currentRole).apply()
+                    pendingKitchenTasks = 0
+                    handler.removeCallbacks(repeatAlert)
+                    updateRoleBadge()
+                    dialog.dismiss()
+                    loadRoleHome()
+                }
             }
-            .setCancelable(!firstRun)
-            .show()
+            container.addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(66)).apply {
+                bottomMargin = dp(8)
+            })
+        }
+
+        val soundTest = Button(this).apply {
+            text = "TEST DEVICE SOUND"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            background = roundedBackground(Color.rgb(23, 32, 24), dp(9).toFloat())
+            setOnClickListener {
+                playClick()
+                handler.postDelayed({ playKitchenAlert() }, 180)
+            }
+        }
+        container.addView(soundTest, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
+            topMargin = dp(4)
+        })
+
+        val hint = TextView(this).apply {
+            text = "Tip: keep Media volume high on kitchen tablets. Tap the DEVICE badge at any time to change this setup."
+            textSize = 11f
+            setTextColor(Color.rgb(105, 115, 108))
+            setPadding(0, dp(12), 0, 0)
+        }
+        container.addView(hint)
+
+        dialog.setView(container)
+        dialog.setCancelable(!firstRun)
+        dialog.setOnShowListener {
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.92).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+        dialog.show()
     }
 
     private fun loadRoleHome() {
@@ -343,7 +432,10 @@ class MainActivity : Activity() {
         val update = { online: Boolean ->
             runOnUiThread {
                 connectionBadge.text = if (online) "ONLINE" else "OFFLINE"
-                connectionBadge.setBackgroundColor(if (online) Color.rgb(46, 125, 73) else Color.rgb(190, 48, 48))
+                connectionBadge.background = roundedBackground(
+                    if (online) Color.rgb(46, 125, 73) else Color.rgb(190, 48, 48),
+                    dp(16).toFloat()
+                )
             }
         }
 
@@ -353,6 +445,25 @@ class MainActivity : Activity() {
             override fun onLost(network: Network) = update(connectivityManager.activeNetwork != null)
         })
     }
+
+    private fun roundedBackground(color: Int, radius: Float): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(color)
+            cornerRadius = radius
+        }
+    }
+
+    private fun roundedStrokeBackground(fill: Int, stroke: Int, radius: Float): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(fill)
+            setStroke(dp(1), stroke)
+            cornerRadius = radius
+        }
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun enableImmersiveMode() {
         @Suppress("DEPRECATION")
