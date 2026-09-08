@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { createHash, randomBytes } from "node:crypto";
 
 export type ServicePeriod = { open: string; close: string };
 export type DayHours = { enabled: boolean; periods: ServicePeriod[] };
@@ -53,10 +54,15 @@ export async function ensureReservationSchema() {
       notes text,
       status text NOT NULL DEFAULT 'confirmed',
       source text NOT NULL DEFAULT 'online',
+      management_token_hash text,
+      cancelled_at timestamptz,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `;
+  await sql`ALTER TABLE reservations ADD COLUMN IF NOT EXISTS management_token_hash text`;
+  await sql`ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancelled_at timestamptz`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS reservations_management_token_idx ON reservations (management_token_hash) WHERE management_token_hash IS NOT NULL`;
   await sql`CREATE INDEX IF NOT EXISTS reservations_service_idx ON reservations (booking_date, booking_time, status)`;
   return sql;
 }
@@ -102,4 +108,20 @@ export function makeReference() {
   let code = "BT-";
   for (let i = 0; i < 6; i += 1) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
+}
+
+export function makeManagementToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashManagementToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export function validManagementToken(token: string) {
+  return /^[A-Za-z0-9_-]{43}$/.test(token);
+}
+
+export function validEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 160;
 }
