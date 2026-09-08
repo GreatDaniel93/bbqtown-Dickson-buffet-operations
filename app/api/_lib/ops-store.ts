@@ -17,6 +17,8 @@ export async function ensureOpsSchema() {
   await sql`CREATE TABLE IF NOT EXISTS ops_incidents (id bigserial PRIMARY KEY, created_at bigint NOT NULL, updated_at bigint NOT NULL, category text NOT NULL, severity text NOT NULL DEFAULT 'normal', title text NOT NULL, details text NOT NULL DEFAULT '', action_taken text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'OPEN', owner text NOT NULL DEFAULT '', due_at bigint, closed_at bigint)`;
   await sql`CREATE TABLE IF NOT EXISTS ops_handovers (id bigserial PRIMARY KEY, service_date text NOT NULL, shift text NOT NULL, created_at bigint NOT NULL, created_by text NOT NULL DEFAULT '', stock_notes text NOT NULL DEFAULT '', maintenance_notes text NOT NULL DEFAULT '', food_safety_notes text NOT NULL DEFAULT '', staff_notes text NOT NULL DEFAULT '', cleaning_notes text NOT NULL DEFAULT '', next_shift_notes text NOT NULL DEFAULT '')`;
   await sql`CREATE TABLE IF NOT EXISTS compliance_documents (id bigserial PRIMARY KEY, document_type text NOT NULL, title text NOT NULL, reference text NOT NULL DEFAULT '', issue_date text NOT NULL DEFAULT '', expiry_date text NOT NULL DEFAULT '', review_date text NOT NULL DEFAULT '', location text NOT NULL DEFAULT '', notes text NOT NULL DEFAULT '', updated_at bigint NOT NULL)`;
+  await sql`CREATE TABLE IF NOT EXISTS ops_routines (id bigserial PRIMARY KEY, task_key text UNIQUE NOT NULL, title text NOT NULL, description text NOT NULL DEFAULT '', category text NOT NULL DEFAULT 'OPERATIONS', frequency text NOT NULL DEFAULT 'DAILY', active boolean NOT NULL DEFAULT true, sort_order integer NOT NULL DEFAULT 100)`;
+  await sql`CREATE TABLE IF NOT EXISTS ops_routine_logs (id bigserial PRIMARY KEY, routine_id bigint NOT NULL REFERENCES ops_routines(id) ON DELETE CASCADE, service_date text NOT NULL, completed_at bigint NOT NULL, completed_by text NOT NULL DEFAULT '', notes text NOT NULL DEFAULT '', UNIQUE(routine_id, service_date))`;
   await sql`CREATE INDEX IF NOT EXISTS ops_events_created_at_idx ON ops_events (created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS ops_events_type_idx ON ops_events (event_type, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS food_safety_created_at_idx ON food_safety_logs (created_at DESC)`;
@@ -24,5 +26,6 @@ export async function ensureOpsSchema() {
   await sql`CREATE INDEX IF NOT EXISTS ops_incidents_status_idx ON ops_incidents (status, updated_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS ops_handovers_date_idx ON ops_handovers (service_date DESC, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS compliance_documents_expiry_idx ON compliance_documents (expiry_date)`;
+  await sql`CREATE INDEX IF NOT EXISTS ops_routine_logs_date_idx ON ops_routine_logs (service_date DESC, completed_at DESC)`;
   return sql;
 }
