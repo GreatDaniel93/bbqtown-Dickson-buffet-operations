@@ -1,22 +1,68 @@
 package com.bbqtown.dickson.ops
 
-import android.graphics.BitmapFactory
-import android.util.Base64
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-private val OFFICIAL_LOGO_BASE64 =
-        "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"
-
+/**
+ * Crash-safe BBQ Town brand lockup.
+ *
+ * Alpha5 decoded an embedded bitmap at composition time. On some Android
+ * devices BitmapFactory can return null for that payload, which caused an
+ * immediate crash when asImageBitmap() was called. Keep startup completely
+ * resource-free here so the app always opens; the exact raster logo can be
+ * restored as a normal Android drawable once the binary asset is committed.
+ */
 @Composable
 internal fun OfficialBbqTownLogo(modifier: Modifier = Modifier) {
-    val image = remember {
-        val bytes = Base64.decode(OFFICIAL_LOGO_BASE64, Base64.DEFAULT)
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap()
+    Row(
+        modifier = modifier
+            .background(Color.White, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "BBQ TOWN",
+                color = Color(0xFFC8A36A),
+                fontWeight = FontWeight.Black,
+                fontSize = 18.sp,
+                letterSpacing = 0.4.sp
+            )
+            Spacer(Modifier.height(1.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .width(22.dp)
+                        .height(3.dp)
+                        .background(Color(0xFFD64536), RoundedCornerShape(2.dp))
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "KOREAN BBQ BUFFET",
+                    color = Color(0xFF1D211F),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    letterSpacing = 0.7.sp
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .background(Color(0xFFD64536), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("BBQ", color = Color.White, fontWeight = FontWeight.Black, fontSize = 7.sp)
+        }
     }
-    Image(bitmap = image, contentDescription = "BBQ Town Korean BBQ Buffet logo", modifier = modifier, contentScale = ContentScale.Fit)
 }
