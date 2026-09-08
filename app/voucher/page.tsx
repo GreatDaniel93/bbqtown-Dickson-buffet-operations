@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { BBQTOWN_LOGO_DATA_URL } from "../logo-data";
 
 type Voucher = {
   code: string;
@@ -106,8 +105,10 @@ export default function VoucherPage() {
         }}
       >
         <img
-          src={BBQTOWN_LOGO_DATA_URL}
+          src="/logo?v=20260908-5"
           alt="BBQTOWN Korean BBQ Buffet"
+          width={440}
+          height={181}
           style={{
             display: "block",
             width: "min(380px, 94%)",
