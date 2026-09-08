@@ -5,6 +5,7 @@ Allow: /street-voucher-poster.html
 Disallow: /ops.html
 Disallow: /tables.html
 Disallow: /reservations
+Disallow: /manage-booking.html
 Disallow: /vouchers
 Disallow: /staff-login
 
