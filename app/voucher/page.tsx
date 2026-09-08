@@ -105,13 +105,13 @@ export default function VoucherPage() {
         }}
       >
         <img
-          src="/bbqtown-logo.jpg?v=20260908-8"
+          src="/bbqtown-logo-official.svg?v=20260908-9"
           alt="BBQTOWN Korean BBQ Buffet"
-          width={440}
-          height={181}
+          width={700}
+          height={287}
           style={{
             display: "block",
-            width: "min(380px, 94%)",
+            width: "min(400px, 96%)",
             height: "auto",
             margin: "0 auto 4px",
             objectFit: "contain",
