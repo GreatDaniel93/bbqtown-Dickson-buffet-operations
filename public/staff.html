@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#172018" />
+  <title>BBQ Town Staff</title>
+  <style>
+    *{box-sizing:border-box}html{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f4ef;color:#172018}body{margin:0;min-height:100vh}.top{background:#172018;color:#fff;padding:22px 18px}.top h1{margin:0;font-size:22px}.top p{margin:5px 0 0;color:#b9c5bc;font-size:13px}.wrap{max-width:760px;margin:0 auto;padding:26px 18px 40px}.intro{margin-bottom:18px}.intro h2{font-size:28px;margin:0 0 7px;letter-spacing:-.035em}.intro p{margin:0;color:#69736c;line-height:1.55}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #dfe5df;border-radius:12px;padding:20px;min-height:150px;box-shadow:0 2px 6px #1720180a}.card:active{transform:scale(.99)}.icon{font-size:28px}.card h3{margin:14px 0 5px;font-size:18px}.card p{margin:0;color:#69736c;font-size:13px;line-height:1.45}.primary{border-color:#86b79a;background:#edf7f0}.voucher{border-color:#e7c276;background:#fff8e8}.fallback{margin-top:22px;padding-top:18px;border-top:1px solid #dfe5df}.fallback h3{margin:0 0 7px;font-size:15px}.fallback p{margin:0 0 12px;color:#69736c;font-size:12px;line-height:1.5}.fallback a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 15px;border-radius:8px;background:#172018;color:#fff;text-decoration:none;font-weight:800;font-size:13px}@media(max-width:580px){.grid{grid-template-columns:1fr}.card{min-height:130px}.intro h2{font-size:24px}}
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1>BBQ TOWN</h1>
+    <p>Dickson · Staff Web</p>
+  </header>
+  <main class="wrap">
+    <section class="intro">
+      <h2>Staff tools</h2>
+      <p>The daily floor and kitchen workflow now lives in the BBQ Town Ops Android app. The browser is kept simple for bookings, voucher verification and emergency access.</p>
+    </section>
+    <section class="grid">
+      <a class="card primary" href="/reservations.html">
+        <div class="icon">📅</div>
+        <h3>Bookings</h3>
+        <p>View and manage restaurant reservations.</p>
+      </a>
+      <a class="card voucher" href="/vouchers">
+        <div class="icon">🎟️</div>
+        <h3>Verify Voucher</h3>
+        <p>Check and redeem customer voucher codes.</p>
+      </a>
+      <a class="card" href="/book.html">
+        <div class="icon">🔗</div>
+        <h3>Customer Booking Page</h3>
+        <p>Open the public booking page for a customer.</p>
+      </a>
+      <a class="card" href="/voucher">
+        <div class="icon">🏷️</div>
+        <h3>Customer Voucher Page</h3>
+        <p>Open the public voucher claim journey.</p>
+      </a>
+    </section>
+    <section class="fallback">
+      <h3>Emergency browser fallback</h3>
+      <p>If an Android device is unavailable, the old full operations screen is still available here. Normal daily operation should use the APK.</p>
+      <a href="/ops.html?full=1">OPEN FULL OPS</a>
+    </section>
+  </main>
+</body>
+</html>
