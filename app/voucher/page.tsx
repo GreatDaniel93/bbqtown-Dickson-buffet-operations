@@ -11,21 +11,16 @@ type Voucher = {
   discountPercent: number;
 };
 
-const dateFormatter = new Intl.DateTimeFormat("en-AU", {
-  timeZone: "Australia/Sydney",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
 const dayFormatter = new Intl.DateTimeFormat("en-AU", {
   timeZone: "Australia/Sydney",
   day: "numeric",
   month: "short",
   year: "numeric",
 });
+
+function lastValidDay(expiresAt: string) {
+  return new Date(new Date(expiresAt).getTime() - 1000);
+}
 
 export default function VoucherPage() {
   const [loading, setLoading] = useState(true);
@@ -72,7 +67,7 @@ export default function VoucherPage() {
       <section style={{ width: "min(480px, 100%)", background: "#f7f4ec", borderRadius: 24, padding: "30px 26px", textAlign: "center", color: "#172018", boxShadow: "0 24px 70px rgba(0,0,0,.28)" }}>
         <p style={{ letterSpacing: 2.5, fontWeight: 900, margin: 0, color: "#2f7e54" }}>BBQTOWN DICKSON</p>
         <h1 style={{ fontSize: 52, lineHeight: 1, margin: "18px 0 8px" }}>10% OFF</h1>
-        <p style={{ color: "#566058", lineHeight: 1.55, margin: "0 auto", maxWidth: 360 }}>Your one-time street promotion voucher. It cannot be used on the day it is issued and expires 14 days after issue.</p>
+        <p style={{ color: "#566058", lineHeight: 1.55, margin: "0 auto", maxWidth: 360 }}>Your one-time BBQTOWN Dickson voucher. It becomes valid tomorrow and can be used for 14 full calendar days.</p>
 
         {loading && (
           <div style={{ marginTop: 28, padding: 28, borderRadius: 16, background: "white", fontWeight: 900, color: "#2f7e54" }}>CREATING YOUR VOUCHER…</div>
@@ -85,7 +80,7 @@ export default function VoucherPage() {
             <div style={{ fontSize: 27, fontWeight: 900, letterSpacing: 2, overflowWrap: "anywhere" }}>{voucher.code}</div>
             <div style={{ color: "#c64036", fontWeight: 900, marginTop: 12 }}>NOT VALID TODAY</div>
             <div style={{ color: "#2f7e54", fontWeight: 900, marginTop: 7 }}>Valid from {dayFormatter.format(new Date(voucher.validFrom))}</div>
-            <div style={{ color: "#566058", fontWeight: 800, marginTop: 5 }}>Expires {dateFormatter.format(new Date(voucher.expiresAt))}</div>
+            <div style={{ color: "#566058", fontWeight: 800, marginTop: 5 }}>Valid through {dayFormatter.format(lastValidDay(voucher.expiresAt))}</div>
             <p style={{ fontSize: 13, lineHeight: 1.45, color: "#566058", margin: "10px 0 0" }}>Show this screen to staff before payment. Staff will verify the code in the system.</p>
           </div>
         )}
@@ -97,7 +92,7 @@ export default function VoucherPage() {
           </div>
         )}
 
-        <p style={{ color: "#69736c", fontSize: 12, lineHeight: 1.5, margin: "22px 0 0" }}>Valid at BBQTOWN Dickson only. Not valid on the day of issue. One active voucher per device. One use only. Cannot be combined with other offers.</p>
+        <p style={{ color: "#69736c", fontSize: 12, lineHeight: 1.5, margin: "22px 0 0" }}>Valid at BBQTOWN Dickson only. Valid from the day after issue for 14 full calendar days. One active voucher per device. One use only. Cannot be combined with other offers.</p>
       </section>
     </main>
   );
