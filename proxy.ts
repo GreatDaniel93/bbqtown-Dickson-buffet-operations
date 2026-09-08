@@ -33,6 +33,18 @@ const PUBLIC_BOOKING_IMAGES = new Set([
   "/images/bbq-fried-food.jpg",
 ]);
 
+const ANDROID_OPS_PAGES = new Set([
+  "/ops.html",
+  "/tables.html",
+  "/manager-dashboard.html",
+  "/routines.html",
+  "/health.html",
+  "/food-safety-advanced.html",
+  "/management.html",
+  "/inspection-pack.html",
+  "/kitchen-prep.html",
+]);
+
 function hex(bytes: ArrayBuffer) {
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -60,9 +72,21 @@ function isOpsAndroid(request: NextRequest) {
   return request.headers.get("user-agent")?.includes("BBQTownOpsAndroid") ?? false;
 }
 
+function isAndroidOpsRoute(pathname: string) {
+  return ANDROID_OPS_PAGES.has(pathname) || pathname.startsWith("/api/ops/") || pathname === "/api/health" || pathname.startsWith("/api/health/");
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (isPublic(pathname)) return NextResponse.next();
+
+  // The installed BBQ Town Ops Android shell has its own role-locked navigation.
+  // Allow only the operational pages/APIs it needs so a fresh install can work
+  // before a browser staff session exists. Customer booking/voucher/staff routes
+  // remain blocked by the native shell and are not included here.
+  if (isOpsAndroid(request) && isAndroidOpsRoute(pathname)) {
+    return NextResponse.next();
+  }
 
   const staffSignedIn = await hasStaffSession(request);
   if (staffSignedIn) {
