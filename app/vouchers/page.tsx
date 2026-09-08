@@ -29,7 +29,7 @@ export default function VouchersPage() {
   return (
     <main style={{ minHeight: "100vh", background: "#f5f4ef", color: "#172018", padding: 32, fontFamily: "Arial, sans-serif" }}>
       <section style={{ maxWidth: 620, margin: "50px auto", background: "white", borderRadius: 16, padding: 30 }}>
-        <img src="/bbqtown-logo.jpg?v=20260908-8" alt="BBQTOWN Korean BBQ Buffet" width={440} height={181} style={{ display: "block", width: "min(320px, 80%)", height: "auto", margin: "0 auto 10px" }} />
+        <img src="/bbqtown-logo-official.svg?v=20260908-9" alt="BBQTOWN Korean BBQ Buffet" width={700} height={287} style={{ display: "block", width: "min(340px, 88%)", height: "auto", margin: "0 auto 10px" }} />
         <p style={{ textAlign: "center", letterSpacing: 1, fontWeight: 800, fontSize: 12 }}>DICKSON · STAFF ONLY</p>
         <button onClick={() => window.history.back()} style={{ minHeight: 42, border: "1px solid #ccd4cd", borderRadius: 8, background: "white", color: "#172018", fontWeight: 800, padding: "0 14px" }}>← BACK TO MANAGER</button>
         <h1>Redeem 10% voucher</h1>
