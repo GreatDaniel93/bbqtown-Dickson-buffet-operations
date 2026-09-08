@@ -8,70 +8,21 @@ export function getOpsSql() {
 
 export async function ensureOpsSchema() {
   const sql = getOpsSql();
-  await sql`
-    CREATE TABLE IF NOT EXISTS ops_devices (
-      device_id text PRIMARY KEY,
-      role text NOT NULL,
-      app_version text NOT NULL DEFAULT '',
-      pending_tasks integer NOT NULL DEFAULT 0,
-      online boolean NOT NULL DEFAULT true,
-      last_seen bigint NOT NULL,
-      meta jsonb NOT NULL DEFAULT '{}'::jsonb
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS ops_events (
-      id bigserial PRIMARY KEY,
-      created_at bigint NOT NULL,
-      device_id text NOT NULL DEFAULT '',
-      role text NOT NULL DEFAULT '',
-      event_type text NOT NULL,
-      label text NOT NULL DEFAULT '',
-      payload jsonb NOT NULL DEFAULT '{}'::jsonb
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS ops_checklists (
-      id bigserial PRIMARY KEY,
-      service_date text NOT NULL,
-      checklist_type text NOT NULL,
-      payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-      updated_at bigint NOT NULL,
-      UNIQUE(service_date, checklist_type)
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS ops_settings (
-      setting_key text PRIMARY KEY,
-      setting_value jsonb NOT NULL DEFAULT '{}'::jsonb,
-      updated_at bigint NOT NULL
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS food_safety_logs (
-      id bigserial PRIMARY KEY,
-      created_at bigint NOT NULL,
-      log_type text NOT NULL,
-      item text NOT NULL,
-      reading text NOT NULL DEFAULT '',
-      unit text NOT NULL DEFAULT '',
-      result text NOT NULL DEFAULT 'PASS',
-      corrective_action text NOT NULL DEFAULT '',
-      notes text NOT NULL DEFAULT '',
-      device_id text NOT NULL DEFAULT '',
-      role text NOT NULL DEFAULT ''
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS food_safety_daily (
-      service_date text PRIMARY KEY,
-      payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-      updated_at bigint NOT NULL
-    )
-  `;
+  await sql`CREATE TABLE IF NOT EXISTS ops_devices (device_id text PRIMARY KEY, role text NOT NULL, app_version text NOT NULL DEFAULT '', pending_tasks integer NOT NULL DEFAULT 0, online boolean NOT NULL DEFAULT true, last_seen bigint NOT NULL, meta jsonb NOT NULL DEFAULT '{}'::jsonb)`;
+  await sql`CREATE TABLE IF NOT EXISTS ops_events (id bigserial PRIMARY KEY, created_at bigint NOT NULL, device_id text NOT NULL DEFAULT '', role text NOT NULL DEFAULT '', event_type text NOT NULL, label text NOT NULL DEFAULT '', payload jsonb NOT NULL DEFAULT '{}'::jsonb)`;
+  await sql`CREATE TABLE IF NOT EXISTS ops_checklists (id bigserial PRIMARY KEY, service_date text NOT NULL, checklist_type text NOT NULL, payload jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at bigint NOT NULL, UNIQUE(service_date, checklist_type))`;
+  await sql`CREATE TABLE IF NOT EXISTS ops_settings (setting_key text PRIMARY KEY, setting_value jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at bigint NOT NULL)`;
+  await sql`CREATE TABLE IF NOT EXISTS food_safety_logs (id bigserial PRIMARY KEY, created_at bigint NOT NULL, log_type text NOT NULL, item text NOT NULL, reading text NOT NULL DEFAULT '', unit text NOT NULL DEFAULT '', result text NOT NULL DEFAULT 'PASS', corrective_action text NOT NULL DEFAULT '', notes text NOT NULL DEFAULT '', device_id text NOT NULL DEFAULT '', role text NOT NULL DEFAULT '')`;
+  await sql`CREATE TABLE IF NOT EXISTS food_safety_daily (service_date text PRIMARY KEY, payload jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at bigint NOT NULL)`;
+  await sql`CREATE TABLE IF NOT EXISTS ops_incidents (id bigserial PRIMARY KEY, created_at bigint NOT NULL, updated_at bigint NOT NULL, category text NOT NULL, severity text NOT NULL DEFAULT 'normal', title text NOT NULL, details text NOT NULL DEFAULT '', action_taken text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'OPEN', owner text NOT NULL DEFAULT '', due_at bigint, closed_at bigint)`;
+  await sql`CREATE TABLE IF NOT EXISTS ops_handovers (id bigserial PRIMARY KEY, service_date text NOT NULL, shift text NOT NULL, created_at bigint NOT NULL, created_by text NOT NULL DEFAULT '', stock_notes text NOT NULL DEFAULT '', maintenance_notes text NOT NULL DEFAULT '', food_safety_notes text NOT NULL DEFAULT '', staff_notes text NOT NULL DEFAULT '', cleaning_notes text NOT NULL DEFAULT '', next_shift_notes text NOT NULL DEFAULT '')`;
+  await sql`CREATE TABLE IF NOT EXISTS compliance_documents (id bigserial PRIMARY KEY, document_type text NOT NULL, title text NOT NULL, reference text NOT NULL DEFAULT '', issue_date text NOT NULL DEFAULT '', expiry_date text NOT NULL DEFAULT '', review_date text NOT NULL DEFAULT '', location text NOT NULL DEFAULT '', notes text NOT NULL DEFAULT '', updated_at bigint NOT NULL)`;
   await sql`CREATE INDEX IF NOT EXISTS ops_events_created_at_idx ON ops_events (created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS ops_events_type_idx ON ops_events (event_type, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS food_safety_created_at_idx ON food_safety_logs (created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS food_safety_type_idx ON food_safety_logs (log_type, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS ops_incidents_status_idx ON ops_incidents (status, updated_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS ops_handovers_date_idx ON ops_handovers (service_date DESC, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS compliance_documents_expiry_idx ON compliance_documents (expiry_date)`;
   return sql;
 }
