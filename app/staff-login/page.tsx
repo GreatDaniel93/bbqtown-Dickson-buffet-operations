@@ -1,3 +1,5 @@
+import { BBQTOWN_LOGO_DATA_URL } from "../logo-data";
+
 type SearchParams = Promise<{ next?: string; error?: string }>;
 
 function safeNext(value?: string) {
@@ -11,7 +13,7 @@ export default async function StaffLoginPage({ searchParams }: { searchParams: S
   return (
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "#f4f6f2", fontFamily: "Inter, system-ui, sans-serif" }}>
       <form action="/staff-login/submit" method="post" style={{ width: "min(420px, 100%)", background: "white", borderRadius: 22, padding: 28, boxShadow: "0 16px 45px #17201820" }}>
-        <img src="/bbqtown-logo.png" alt="BBQTOWN Korean BBQ Buffet" style={{ display: "block", width: "min(300px, 88%)", height: "auto", margin: "0 auto 8px" }} />
+        <img src={BBQTOWN_LOGO_DATA_URL} alt="BBQTOWN Korean BBQ Buffet" style={{ display: "block", width: "min(300px, 88%)", height: "auto", margin: "0 auto 8px" }} />
         <p style={{ margin: "0 0 8px", textAlign: "center", color: "#178447", fontWeight: 900, letterSpacing: ".12em", fontSize: 12 }}>DICKSON · STAFF</p>
         <h1 style={{ margin: "10px 0 8px", fontSize: 30 }}>Staff access</h1>
         <p style={{ margin: "0 0 22px", color: "#647067", lineHeight: 1.5 }}>店内系统仅供员工使用。请输入 Manager PIN。</p>
