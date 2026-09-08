@@ -56,10 +56,30 @@ function isPublic(pathname: string) {
   return pathname.startsWith("/_next/") || PUBLIC_PATHS.has(pathname) || PUBLIC_BOOKING_IMAGES.has(pathname) || pathname === "/api/vouchers/claim" || pathname === "/api/bookings" || pathname.startsWith("/api/bookings/");
 }
 
+function isOpsAndroid(request: NextRequest) {
+  return request.headers.get("user-agent")?.includes("BBQTownOpsAndroid") ?? false;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (isPublic(pathname)) return NextResponse.next();
-  if (await hasStaffSession(request)) return NextResponse.next();
+
+  const staffSignedIn = await hasStaffSession(request);
+  if (staffSignedIn) {
+    // The full operations screen is now app-first. Normal browsers land on a
+    // slim staff hub, while the Android APK keeps unrestricted access.
+    if (
+      pathname === "/ops.html" &&
+      !isOpsAndroid(request) &&
+      request.nextUrl.searchParams.get("full") !== "1"
+    ) {
+      const staffHub = request.nextUrl.clone();
+      staffHub.pathname = "/staff.html";
+      staffHub.search = "";
+      return NextResponse.redirect(staffHub);
+    }
+    return NextResponse.next();
+  }
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "Staff sign-in required" }, { status: 401 });
