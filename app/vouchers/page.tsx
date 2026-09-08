@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { BBQTOWN_LOGO_DATA_URL } from "../logo-data";
 
 export default function VouchersPage() {
   const [code, setCode] = useState("");
@@ -30,7 +29,7 @@ export default function VouchersPage() {
   return (
     <main style={{ minHeight: "100vh", background: "#f5f4ef", color: "#172018", padding: 32, fontFamily: "Arial, sans-serif" }}>
       <section style={{ maxWidth: 620, margin: "50px auto", background: "white", borderRadius: 16, padding: 30 }}>
-        <img src={BBQTOWN_LOGO_DATA_URL} alt="BBQTOWN Korean BBQ Buffet" style={{ display: "block", width: "min(320px, 80%)", height: "auto", margin: "0 auto 10px" }} />
+        <img src="/logo?v=20260908-5" alt="BBQTOWN Korean BBQ Buffet" width={440} height={181} style={{ display: "block", width: "min(320px, 80%)", height: "auto", margin: "0 auto 10px" }} />
         <p style={{ textAlign: "center", letterSpacing: 1, fontWeight: 800, fontSize: 12 }}>DICKSON · STAFF ONLY</p>
         <button onClick={() => window.history.back()} style={{ minHeight: 42, border: "1px solid #ccd4cd", borderRadius: 8, background: "white", color: "#172018", fontWeight: 800, padding: "0 14px" }}>← BACK TO MANAGER</button>
         <h1>Redeem 10% voucher</h1>
