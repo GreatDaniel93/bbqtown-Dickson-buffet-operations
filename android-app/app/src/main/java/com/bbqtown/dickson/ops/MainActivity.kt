@@ -3,10 +3,12 @@ package com.bbqtown.dickson.ops
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Color
-import android.net.Uri
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Bundle
 import android.view.View
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -19,6 +21,7 @@ class MainActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var progress: ProgressBar
     private lateinit var offlineMessage: TextView
+    private var toneGenerator: ToneGenerator? = null
 
     companion object {
         private const val HOME_URL = "https://bbqtowndickson.com/ops.html"
@@ -31,9 +34,27 @@ class MainActivity : Activity() {
         )
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    inner class NativeAudioBridge {
+        @JavascriptInterface
+        fun click() {
+            runOnUiThread {
+                try {
+                    if (toneGenerator == null) {
+                        toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+                    }
+                    toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 90)
+                } catch (_: Exception) {
+                    // Never block the operations UI if audio is unavailable.
+                }
+            }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        volumeControlStream = AudioManager.STREAM_MUSIC
 
         val root = FrameLayout(this)
         webView = WebView(this)
@@ -46,7 +67,10 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.rgb(245, 244, 239))
             setTextColor(Color.rgb(23, 32, 24))
             visibility = View.GONE
-            setOnClickListener { webView.reload() }
+            setOnClickListener {
+                NativeAudioBridge().click()
+                webView.reload()
+            }
         }
 
         root.addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -65,8 +89,11 @@ class MainActivity : Activity() {
             builtInZoomControls = false
             displayZoomControls = false
             setSupportZoom(false)
-            userAgentString = "$userAgentString BBQTownOpsAndroid/1.0"
+            userAgentString = "$userAgentString BBQTownOpsAndroid/1.1"
         }
+
+        // Native bridge: sounds come from Android itself rather than relying on browser audio.
+        webView.addJavascriptInterface(NativeAudioBridge(), "BBQNativeAudio")
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -103,6 +130,21 @@ class MainActivity : Activity() {
                       document.querySelectorAll('a[href="/vouchers"],a[href^="/voucher"],a[href^="/reservations"],a[href^="/book"]').forEach(hide);
                       const brand = document.getElementById('brandSub');
                       if (brand && !brand.textContent.includes('App')) brand.textContent = brand.textContent + ' · App';
+
+                      // Attach once per page. Every real UI click/tap gets a short native Android beep.
+                      if (!window.__bbqNativeClickSoundInstalled) {
+                        window.__bbqNativeClickSoundInstalled = true;
+                        document.addEventListener('click', function(event) {
+                          try {
+                            const target = event.target && event.target.closest
+                              ? event.target.closest('button, a, [role="button"], input[type="button"], input[type="submit"], input[type="checkbox"], input[type="radio"], select, .task, .card')
+                              : null;
+                            if (target && window.BBQNativeAudio && window.BBQNativeAudio.click) {
+                              window.BBQNativeAudio.click();
+                            }
+                          } catch (_) {}
+                        }, true);
+                      }
                     })();
                 """.trimIndent()
                 view.evaluateJavascript(script, null)
@@ -134,6 +176,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        toneGenerator?.release()
+        toneGenerator = null
         webView.destroy()
         super.onDestroy()
     }
