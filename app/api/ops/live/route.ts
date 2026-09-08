@@ -80,72 +80,97 @@ export async function POST(request: Request) {
     if (action === "status") {
       const id = Number(body.id);
       const next = String(body.status || "").toUpperCase();
-      if (!['GOOD','LOW','EMPTY'].includes(next)) return Response.json({ error: "Invalid status" }, { status: 400 });
-      const food = foods.find((f:any)=>Number(f.id)===id);
+      if (!["GOOD", "LOW", "EMPTY"].includes(next)) return Response.json({ error: "Invalid status" }, { status: 400 });
+      const food = foods.find((f: any) => Number(f.id) === id);
       if (!food) return Response.json({ error: "Food not found" }, { status: 404 });
       const old = food.status;
-      const wasIdle = food.kitchen === 'idle' || !food.kitchen;
+      const wasIdle = food.kitchen === "idle" || !food.kitchen;
       food.status = next;
-      if (next === 'LOW' || next === 'EMPTY') {
+      if (next === "LOW" || next === "EMPTY") {
         if (wasIdle) {
-          food.kitchen = 'requested';
+          food.kitchen = "requested";
           food.requestedAt = now;
           delete food.readyAt;
         }
-      } else if (old !== 'GOOD' && food.kitchen === 'requested') {
-        food.kitchen = 'idle';
+      } else if (old !== "GOOD" && food.kitchen === "requested") {
+        food.kitchen = "idle";
         delete food.requestedAt;
         delete food.readyAt;
       }
-      log(state, `${next} STATUS`, food, next==='EMPTY'?'Urgent kitchen request':next==='LOW'?'Prepare next tray':'Floor confirmed display is good');
+      log(state, `${next} STATUS`, food, next === "EMPTY" ? "Urgent kitchen request" : next === "LOW" ? "Prepare next tray" : "Floor confirmed display is good");
     } else if (action === "kitchen_prepare") {
-      const food = foods.find((f:any)=>Number(f.id)===Number(body.id));
+      const food = foods.find((f: any) => Number(f.id) === Number(body.id));
       if (!food) return Response.json({ error: "Food not found" }, { status: 404 });
-      if (food.kitchen === 'requested') {
-        food.kitchen = 'preparing';
+      if (food.kitchen === "requested") {
+        food.kitchen = "preparing";
         food.preparingAt = now;
-        log(state, 'PREPARING STARTED', food, 'Kitchen accepted request');
+        log(state, "PREPARING STARTED", food, "Kitchen accepted request");
       }
     } else if (action === "kitchen_ready") {
-      const food = foods.find((f:any)=>Number(f.id)===Number(body.id));
+      const food = foods.find((f: any) => Number(f.id) === Number(body.id));
       if (!food) return Response.json({ error: "Food not found" }, { status: 404 });
-      if (food.kitchen === 'preparing') {
-        food.kitchen = 'ready';
+      if (food.kitchen === "preparing") {
+        food.kitchen = "ready";
         food.readyAt = now;
-        log(state, 'READY TO REFILL', food, 'Kitchen finished; waiting for FOH confirmation');
+        log(state, "READY TO REFILL", food, "Kitchen finished; waiting for FOH confirmation");
       }
     } else if (action === "refilled") {
-      const food = foods.find((f:any)=>Number(f.id)===Number(body.id));
+      const food = foods.find((f: any) => Number(f.id) === Number(body.id));
       if (!food) return Response.json({ error: "Food not found" }, { status: 404 });
-      food.kitchen = 'idle';
-      food.status = 'GOOD';
+      food.kitchen = "idle";
+      food.status = "GOOD";
       food.start = now;
       delete food.requestedAt;
       delete food.preparingAt;
       delete food.readyAt;
       delete food.stoppedAt;
       delete food.closedAt;
-      log(state, 'NEW BATCH STARTED BY FOH', food, 'Refilled on floor; new service timer started');
+      log(state, "NEW BATCH STARTED BY FOH", food, "Refilled on floor; new service timer started");
     } else if (action === "start_all") {
-      foods.forEach((food:any)=>{
+      foods.forEach((food: any) => {
         food.start = now;
-        food.status = 'GOOD';
-        food.kitchen = 'idle';
+        food.status = "GOOD";
+        food.kitchen = "idle";
         delete food.requestedAt;
         delete food.preparingAt;
         delete food.readyAt;
         delete food.stoppedAt;
         delete food.closedAt;
       });
-      log(state, `BULK START · ${foods.length} NEW BATCHES`, null, 'All items started together');
+      log(state, `BULK START · ${foods.length} NEW BATCHES`, null, "All items started together");
     } else if (action === "close_all") {
-      foods.forEach((food:any)=>{
+      foods.forEach((food: any) => {
         food.closedAt = now;
         food.stoppedAt = now;
-        food.status = 'CLOSED';
-        food.kitchen = 'idle';
+        food.status = "CLOSED";
+        food.kitchen = "idle";
       });
-      log(state, `END OF DAY · ${foods.length} DISHES CLEARED`, null, 'All dishes cleared and kitchen tasks cancelled');
+      log(state, `END OF DAY · ${foods.length} DISHES CLEARED`, null, "All dishes cleared and kitchen tasks cancelled");
+    } else if (action === "dish_add") {
+      const name = String(body.name || "").trim();
+      const category = String(body.category || "Other").trim() || "Other";
+      const section = Number(body.section) === 2 ? 2 : 1;
+      if (!name) return Response.json({ error: "Dish name is required" }, { status: 400 });
+      const id = foods.reduce((max: number, f: any) => Math.max(max, Number(f.id) || 0), 0) + 1;
+      const food = { id, name, category, section, status: "GOOD", kitchen: "idle", start: 0 };
+      foods.push(food);
+      log(state, "DISH ADDED", food, `${category} · Section ${section}`);
+    } else if (action === "dish_update") {
+      const id = Number(body.id);
+      const food = foods.find((f: any) => Number(f.id) === id);
+      if (!food) return Response.json({ error: "Food not found" }, { status: 404 });
+      const name = String(body.name || "").trim();
+      if (!name) return Response.json({ error: "Dish name is required" }, { status: 400 });
+      food.name = name;
+      food.category = String(body.category || "Other").trim() || "Other";
+      food.section = Number(body.section) === 2 ? 2 : 1;
+      log(state, "DISH UPDATED", food, `${food.category} · Section ${food.section}`);
+    } else if (action === "dish_delete") {
+      const id = Number(body.id);
+      const index = foods.findIndex((f: any) => Number(f.id) === id);
+      if (index < 0) return Response.json({ error: "Food not found" }, { status: 404 });
+      const [food] = foods.splice(index, 1);
+      log(state, "DISH REMOVED", food, "Removed from active buffet list");
     } else {
       return Response.json({ error: "Unknown action" }, { status: 400 });
     }
