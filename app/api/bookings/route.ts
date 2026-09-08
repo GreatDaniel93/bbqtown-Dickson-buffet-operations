@@ -1,4 +1,5 @@
-import { ensureReservationSchema, makeReference, readSettings, slotsForDate, validDate, validTime } from "../_lib/reservations";
+import { sendBookingEmail } from "../_lib/booking-email";
+import { ensureReservationSchema, hashManagementToken, makeManagementToken, makeReference, readSettings, slotsForDate, validDate, validEmail, validTime } from "../_lib/reservations";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const email = String(body.email || "").trim();
     const notes = String(body.notes || "").trim();
     const partySize = Number(body.partySize);
-    if (!validDate(date) || !validTime(time) || !name || name.length > 100 || phone.length < 6 || phone.length > 30 || email.length > 160 || notes.length > 600) {
+    if (!validDate(date) || !validTime(time) || !name || name.length > 100 || phone.length < 6 || phone.length > 30 || !validEmail(email) || notes.length > 600) {
       return Response.json({ error: "Please check the booking details." }, { status: 400 });
     }
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -35,13 +36,31 @@ export async function POST(request: Request) {
       return Response.json({ error: "That time has just filled up. Please choose another time." }, { status: 409 });
     }
     let reference = makeReference();
+    const managementToken = makeManagementToken();
+    const managementTokenHash = hashManagementToken(managementToken);
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        await sql`
-          INSERT INTO reservations (reference, booking_date, booking_time, party_size, guest_name, phone, email, notes)
-          VALUES (${reference}, ${date}::date, ${time}::time, ${partySize}, ${name}, ${phone}, ${email || null}, ${notes || null})
+        const [created] = await sql`
+          INSERT INTO reservations (reference, booking_date, booking_time, party_size, guest_name, phone, email, notes, management_token_hash)
+          VALUES (${reference}, ${date}::date, ${time}::time, ${partySize}, ${name}, ${phone}, ${email}, ${notes || null}, ${managementTokenHash})
+          RETURNING created_at
         `;
-        return Response.json({ ok: true, reference, date, time, partySize });
+        let emailSent = false;
+        try {
+          const mail = await sendBookingEmail({ reference, date, time, partySize, guestName: name, email }, "confirmed", managementToken, new Date(created.created_at).toISOString());
+          emailSent = mail.sent;
+        } catch (emailError) {
+          console.error("Booking confirmation email failed", emailError instanceof Error ? emailError.message : "Unknown email error");
+        }
+        return Response.json({
+          ok: true,
+          reference,
+          date,
+          time,
+          partySize,
+          emailSent,
+          manageUrl: `/manage-booking.html#token=${encodeURIComponent(managementToken)}`,
+        });
       } catch (error) {
         if (attempt === 2) throw error;
         reference = makeReference();
