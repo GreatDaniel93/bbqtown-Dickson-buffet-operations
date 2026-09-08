@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { BBQTOWN_LOGO_DATA_URL } from "../logo-data";
 
 type Voucher = {
   code: string;
@@ -12,7 +13,6 @@ type Voucher = {
 };
 
 const REVIEW_URL = "https://g.page/r/CUEVJmvZGEyeEAE/review";
-const LOGO_URL = "https://raw.githubusercontent.com/GreatDaniel93/bbqtown-Dickson-buffet-operations/main/public/bbqtown-logo.jpg";
 const dayFormatter = new Intl.DateTimeFormat("en-AU", {
   timeZone: "Australia/Sydney",
   day: "numeric",
@@ -106,7 +106,7 @@ export default function VoucherPage() {
         }}
       >
         <img
-          src={LOGO_URL}
+          src={BBQTOWN_LOGO_DATA_URL}
           alt="BBQTOWN Korean BBQ Buffet"
           style={{
             display: "block",
