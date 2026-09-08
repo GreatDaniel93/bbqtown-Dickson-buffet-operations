@@ -33,10 +33,12 @@ function prettyDate(value: string) {
 
 export async function sendBookingEmail(data: BookingEmailData, kind: BookingEmailKind, managementToken: string, version: string) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.BOOKING_EMAIL_FROM;
-  if (!apiKey || !from) return { sent: false, reason: "not_configured" as const };
+  const emailDomain = process.env.RESEND_EMAIL_DOMAIN || "bbqtowndickson.com";
+  const from = process.env.BOOKING_EMAIL_FROM
+    || `BBQTOWN Dickson Reservations <bookings@${emailDomain}>`;
+  if (!apiKey) return { sent: false, reason: "not_configured" as const };
 
-  const siteUrl = (process.env.PUBLIC_SITE_URL || "https://bbqtowndickson.vercel.app").replace(/\/$/, "");
+  const siteUrl = (process.env.PUBLIC_SITE_URL || "https://bbqtowndickson.com").replace(/\/$/, "");
   const manageUrl = `${siteUrl}/manage-booking.html#token=${encodeURIComponent(managementToken)}`;
   const heading = kind === "confirmed" ? "Reservation confirmed" : kind === "updated" ? "Reservation updated" : "Reservation cancelled";
   const subject = `${heading} · ${data.reference}`;
