@@ -53,7 +53,7 @@ async function hasStaffSession(request: NextRequest) {
 }
 
 function isPublic(pathname: string) {
-  return PUBLIC_PATHS.has(pathname) || PUBLIC_BOOKING_IMAGES.has(pathname) || pathname === "/api/vouchers/claim" || pathname === "/api/bookings" || pathname.startsWith("/api/bookings/");
+  return pathname.startsWith("/_next/") || PUBLIC_PATHS.has(pathname) || PUBLIC_BOOKING_IMAGES.has(pathname) || pathname === "/api/vouchers/claim" || pathname === "/api/bookings" || pathname.startsWith("/api/bookings/");
 }
 
 export async function proxy(request: NextRequest) {
@@ -71,6 +71,6 @@ export async function proxy(request: NextRequest) {
   return NextResponse.redirect(login);
 }
 
-export const proxyConfig = {
+export const config = {
   matcher: ["/((?!_next/static|_next/image).*)"],
 };
