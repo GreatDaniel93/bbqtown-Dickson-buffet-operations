@@ -25,7 +25,7 @@ export async function POST() {
         INSERT INTO street_vouchers (code, voucher_date, claim_key, discount_percent, valid_from, expires_at)
         SELECT ${candidate}, ${date}, ${key}, 10,
           (((${date}::date + 1)::timestamp) AT TIME ZONE 'Australia/Sydney'),
-          now() + interval '14 days'
+          (((${date}::date + 15)::timestamp) AT TIME ZONE 'Australia/Sydney')
         FROM issued WHERE count < 100
         RETURNING code, voucher_date, issued_at, valid_from, expires_at, discount_percent
       `;
