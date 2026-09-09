@@ -1,18 +1,13 @@
 package com.bbqtown.dickson.ops
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,32 +25,25 @@ internal val BrandRed = Color(0xFFB5372F)
 @Composable
 internal fun BbqTownBrandLockup(compact: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(if (compact) 12.dp else 18.dp)
-        ) {
-            Image(
-                painter = painterResource(R.drawable.ic_launcher),
-                contentDescription = "BBQ Town logo",
-                modifier = Modifier
-                    .size(if (compact) 38.dp else 62.dp)
-                    .clip(RoundedCornerShape(if (compact) 12.dp else 18.dp))
-            )
-        }
+        OfficialBbqTownLogo(
+            Modifier
+                .width(if (compact) 118.dp else 210.dp)
+                .height(if (compact) 42.dp else 72.dp)
+        )
         Spacer(Modifier.width(if (compact) 10.dp else 14.dp))
         Column {
             Text(
-                "BBQ TOWN",
-                color = if (compact) Color.White else BrandGold,
+                "DICKSON OPERATIONS",
+                color = Color.White,
                 fontWeight = FontWeight.Black,
-                fontSize = if (compact) 13.sp else 18.sp
+                fontSize = if (compact) 11.sp else 15.sp
             )
             Text(
-                "DICKSON OPERATIONS",
-                color = Color.White.copy(alpha = if (compact) .62f else .70f),
+                if (compact) "STORE OPS" else "BUFFET OPERATIONS",
+                color = Color.White.copy(alpha = .62f),
                 fontWeight = FontWeight.Bold,
-                fontSize = if (compact) 8.sp else 10.sp,
-                letterSpacing = 1.1.sp
+                fontSize = if (compact) 7.sp else 9.sp,
+                letterSpacing = 1.0.sp
             )
         }
     }
