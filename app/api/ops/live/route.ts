@@ -1,25 +1,6 @@
-import { neon } from "@neondatabase/serverless";
+import { ensureOpsSchema } from "../../_lib/ops-store";
 
 export const dynamic = "force-dynamic";
-
-function getSql() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not configured");
-  return neon(url);
-}
-
-async function ensureSchema() {
-  const sql = getSql();
-  await sql`
-    CREATE TABLE IF NOT EXISTS buffet_state (
-      id integer PRIMARY KEY,
-      payload jsonb NOT NULL,
-      updated_at bigint NOT NULL,
-      CONSTRAINT buffet_state_singleton CHECK (id = 1)
-    )
-  `;
-  return sql;
-}
 
 function asObject(value: unknown): any {
   if (!value) return null;
@@ -35,7 +16,9 @@ function log(state: any, action: string, food: any, detail: string) {
     section: food ? `Section ${food.section}` : "All Sections",
     detail,
   });
-  state.logs = logs.slice(0, 1000);
+  // The live app does not need to rewrite 1000 historical log entries on every tap.
+  // Keep a bounded recent window; historical/ops logs belong in dedicated tables.
+  state.logs = logs.slice(0, 200);
 }
 
 function publicState(state: any, updatedAt: number) {
@@ -48,12 +31,27 @@ function publicState(state: any, updatedAt: number) {
   });
 }
 
-export async function GET() {
+async function conflictResponse(sql: Awaited<ReturnType<typeof ensureOpsSchema>>) {
+  const [latest] = await sql`SELECT payload, updated_at FROM buffet_state WHERE id=1`;
+  if (!latest) return Response.json({ error: "Buffet state is not initialized" }, { status: 409 });
+  return Response.json(
+    { error: "STATE_CONFLICT", state: asObject(latest.payload), updatedAt: Number(latest.updated_at) },
+    { status: 409 },
+  );
+}
+
+export async function GET(request: Request) {
   try {
-    const sql = await ensureSchema();
+    const sql = await ensureOpsSchema();
     const [row] = await sql`SELECT payload, updated_at FROM buffet_state WHERE id=1`;
     if (!row) return Response.json({ state: { foods: [], logs: [] }, updatedAt: 0 });
-    return publicState(asObject(row.payload), Number(row.updated_at));
+
+    const updatedAt = Number(row.updated_at);
+    const since = Number(new URL(request.url).searchParams.get("since") || 0);
+    if (since > 0 && since === updatedAt) {
+      return Response.json({ unchanged: true, updatedAt });
+    }
+    return publicState(asObject(row.payload), updatedAt);
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Database unavailable" }, { status: 500 });
   }
@@ -62,7 +60,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const sql = await ensureSchema();
+    const sql = await ensureOpsSchema();
     const [row] = await sql`SELECT payload, updated_at FROM buffet_state WHERE id=1`;
     if (!row) return Response.json({ error: "Buffet state is not initialized" }, { status: 409 });
 
@@ -175,9 +173,18 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unknown action" }, { status: 400 });
     }
 
-    const updatedAt = Date.now();
+    // Monotonic version + compare-and-swap prevents two tablets from silently
+    // overwriting each other when they act at the same time.
+    const updatedAt = Math.max(Date.now(), currentUpdatedAt + 1);
     const payload = JSON.stringify({ foods, logs: Array.isArray(state.logs) ? state.logs : [] });
-    await sql`UPDATE buffet_state SET payload=${payload}::jsonb, updated_at=${updatedAt} WHERE id=1`;
+    const [saved] = await sql`
+      UPDATE buffet_state
+      SET payload=${payload}::jsonb, updated_at=${updatedAt}
+      WHERE id=1 AND updated_at=${currentUpdatedAt}
+      RETURNING updated_at
+    `;
+
+    if (!saved) return conflictResponse(sql);
     return publicState({ foods, logs: state.logs }, updatedAt);
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Database unavailable" }, { status: 500 });
