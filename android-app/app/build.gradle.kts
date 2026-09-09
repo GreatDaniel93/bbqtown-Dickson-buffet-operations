@@ -12,8 +12,8 @@ android {
         applicationId = "com.bbqtown.dickson.ops"
         minSdk = 24
         targetSdk = 35
-        versionCode = 19
-        versionName = "2.0.0-alpha5.8"
+        versionCode = 20
+        versionName = "2.0.0-alpha5.9"
     }
 
     buildFeatures {
