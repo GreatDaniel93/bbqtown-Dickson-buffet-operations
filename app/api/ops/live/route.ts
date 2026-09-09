@@ -112,7 +112,7 @@ export async function POST(request: Request) {
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now}
           WHERE id=1
-            AND (${expected}=0 OR version=${expected})
+            AND (${expected}::bigint=0 OR version=${expected}::bigint)
             AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true)
           RETURNING version
         ), changed AS (
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now}
           WHERE id=1
-            AND (${expected}=0 OR version=${expected})
+            AND (${expected}::bigint=0 OR version=${expected}::bigint)
             AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true AND kitchen='requested')
           RETURNING version
         ), changed AS (
@@ -174,7 +174,7 @@ export async function POST(request: Request) {
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now}
           WHERE id=1
-            AND (${expected}=0 OR version=${expected})
+            AND (${expected}::bigint=0 OR version=${expected}::bigint)
             AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true AND kitchen='preparing')
           RETURNING version
         ), changed AS (
@@ -197,7 +197,7 @@ export async function POST(request: Request) {
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now}
           WHERE id=1
-            AND (${expected}=0 OR version=${expected})
+            AND (${expected}::bigint=0 OR version=${expected}::bigint)
             AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true)
           RETURNING version
         ), changed AS (
@@ -217,7 +217,7 @@ export async function POST(request: Request) {
         WITH gate AS (
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now},is_open=true
-          WHERE id=1 AND (${expected}=0 OR version=${expected})
+          WHERE id=1 AND (${expected}::bigint=0 OR version=${expected}::bigint)
           RETURNING version
         ), changed AS (
           UPDATE buffet_foods food
@@ -237,7 +237,7 @@ export async function POST(request: Request) {
         WITH gate AS (
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now},is_open=false
-          WHERE id=1 AND (${expected}=0 OR version=${expected})
+          WHERE id=1 AND (${expected}::bigint=0 OR version=${expected}::bigint)
           RETURNING version
         ), changed AS (
           UPDATE buffet_foods food
@@ -261,7 +261,7 @@ export async function POST(request: Request) {
         WITH gate AS (
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now}
-          WHERE id=1 AND (${expected}=0 OR version=${expected})
+          WHERE id=1 AND (${expected}::bigint=0 OR version=${expected}::bigint)
           RETURNING version
         ), changed AS (
           INSERT INTO buffet_foods(name,category,section,status,kitchen,start_at,sort_order,active,updated_at)
@@ -286,7 +286,7 @@ export async function POST(request: Request) {
         WITH gate AS (
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now}
-          WHERE id=1 AND (${expected}=0 OR version=${expected}) AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true)
+          WHERE id=1 AND (${expected}::bigint=0 OR version=${expected}::bigint) AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true)
           RETURNING version
         ), changed AS (
           UPDATE buffet_foods food
@@ -307,7 +307,7 @@ export async function POST(request: Request) {
         WITH gate AS (
           UPDATE buffet_service
           SET version=GREATEST(version+1,${now}),updated_at=${now}
-          WHERE id=1 AND (${expected}=0 OR version=${expected}) AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true)
+          WHERE id=1 AND (${expected}::bigint=0 OR version=${expected}::bigint) AND EXISTS (SELECT 1 FROM buffet_foods WHERE id=${id} AND active=true)
           RETURNING version
         ), changed AS (
           UPDATE buffet_foods food
