@@ -25,9 +25,10 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
         SELECT
           to_regclass('public.ops_devices') AS core,
           to_regclass('public.kitchen_prep_items') AS prep,
-          to_regclass('public.buffet_state') AS buffet
+          to_regclass('public.buffet_state') AS buffet,
+          to_regclass('public.kitchen_prep_lookup_idx') AS schema_marker
       `;
-      if (probe?.core && probe?.prep && probe?.buffet) return;
+      if (probe?.core && probe?.prep && probe?.buffet && probe?.schema_marker) return;
 
       // First boot / migration: batch all schema work into one HTTP transaction to Neon.
       await sql.transaction([
