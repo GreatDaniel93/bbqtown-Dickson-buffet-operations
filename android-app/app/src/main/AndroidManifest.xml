@@ -22,6 +22,11 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".KitchenBoardActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:exported="false"
+            android:screenOrientation="unspecified" />
+        <activity
             android:name=".PremiumOpsActivity"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:exported="false"
