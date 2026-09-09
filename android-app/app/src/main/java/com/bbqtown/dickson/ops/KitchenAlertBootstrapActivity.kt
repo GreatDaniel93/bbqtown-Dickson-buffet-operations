@@ -17,15 +17,22 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Small launcher that starts the kitchen alert monitor before opening the premium UI.
- * The monitor watches the same local cache that PremiumOpsActivity refreshes, so it
- * adds no extra API polling load.
+ * Launcher + kitchen alert monitor. Kitchen roles use the dedicated three-lane KDS;
+ * FOH/manager continue to use the premium operations activity.
  */
 class KitchenAlertBootstrapActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         KitchenAlertMonitor.start(applicationContext)
-        startActivity(Intent(this, PremiumOpsActivity::class.java))
+
+        val role = getSharedPreferences("bbqtown_ops_v2", Context.MODE_PRIVATE)
+            .getString("role", "").orEmpty()
+        val target = if (role == "s1" || role == "s2") {
+            KitchenBoardActivity::class.java
+        } else {
+            PremiumOpsActivity::class.java
+        }
+        startActivity(Intent(this, target))
         finish()
     }
 }
@@ -45,7 +52,8 @@ object KitchenAlertMonitor {
         scope.launch {
             val rolePrefs = app.getSharedPreferences("bbqtown_ops_v2", Context.MODE_PRIVATE)
             val api = FastApi(app)
-            var lastSection = 0
+            var lastSection = -1
+            var initialized = false
             var seenRequests = emptySet<String>()
             var lastAlertAt = 0L
 
@@ -56,17 +64,30 @@ object KitchenAlertMonitor {
                     else -> 0
                 }
 
-                if (section == 0) {
-                    lastSection = 0
-                    seenRequests = emptySet()
-                    delay(800)
-                    continue
-                }
-
-                if (section != lastSection) {
+                if (!initialized) {
+                    initialized = true
+                    lastSection = section
+                    seenRequests = if (section == 0) emptySet() else {
+                        api.cachedLive()?.foods.orEmpty()
+                            .filter { it.section == section && it.kitchen == "requested" }
+                            .map { "${it.id}:${it.requestedAt}" }.toSet()
+                    }
+                } else if (section != lastSection) {
                     lastSection = section
                     seenRequests = emptySet()
                     lastAlertAt = 0L
+                    if (section > 0 && !KitchenBoardPresence.active) {
+                        app.startActivity(
+                            Intent(app, KitchenBoardActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        )
+                    }
+                }
+
+                if (section == 0) {
+                    seenRequests = emptySet()
+                    delay(800)
+                    continue
                 }
 
                 val requested = api.cachedLive()?.foods.orEmpty()
@@ -81,7 +102,6 @@ object KitchenAlertMonitor {
                         lastAlertAt = now
                     }
                     requested.isNotEmpty() && now - lastAlertAt >= 60_000L -> {
-                        // Repeat once a minute until the kitchen accepts the request.
                         playAlert(app, urgent = requested.any { it.status == "EMPTY" })
                         lastAlertAt = now
                     }
@@ -107,7 +127,6 @@ object KitchenAlertMonitor {
                 tone.release()
             }
         } catch (_: Exception) {
-            // Vibration below still provides a fallback alert.
         }
 
         try {
