@@ -1,4 +1,4 @@
-import { sendBookingEmail } from "../_lib/booking-email";
+import { sendBookingEmail, sendStaffBookingNotification } from "../_lib/booking-email";
 import { ensureReservationSchema, hashManagementToken, makeManagementToken, makeReference, readSettings, slotsForDate, validDate, validEmail, validTime } from "../_lib/reservations";
 
 export const dynamic = "force-dynamic";
@@ -45,12 +45,20 @@ export async function POST(request: Request) {
           VALUES (${reference}, ${date}::date, ${time}::time, ${partySize}, ${name}, ${phone}, ${email}, ${notes || null}, ${managementTokenHash})
           RETURNING created_at
         `;
+        const version = new Date(created.created_at).toISOString();
         let emailSent = false;
+        let staffNotified = false;
         try {
-          const mail = await sendBookingEmail({ reference, date, time, partySize, guestName: name, email }, "confirmed", managementToken, new Date(created.created_at).toISOString());
+          const mail = await sendBookingEmail({ reference, date, time, partySize, guestName: name, email }, "confirmed", managementToken, version);
           emailSent = mail.sent;
         } catch (emailError) {
           console.error("Booking confirmation email failed", emailError instanceof Error ? emailError.message : "Unknown email error");
+        }
+        try {
+          const staffMail = await sendStaffBookingNotification({ reference, date, time, partySize, guestName: name, phone, email, notes, source: "online" }, version);
+          staffNotified = staffMail.sent;
+        } catch (emailError) {
+          console.error("Booking staff notification failed", emailError instanceof Error ? emailError.message : "Unknown email error");
         }
         return Response.json({
           ok: true,
@@ -59,6 +67,7 @@ export async function POST(request: Request) {
           time,
           partySize,
           emailSent,
+          staffNotified,
           manageUrl: `/manage-booking.html#token=${encodeURIComponent(managementToken)}`,
         });
       } catch (error) {
