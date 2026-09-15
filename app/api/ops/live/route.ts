@@ -1,8 +1,10 @@
-import { ensureOpsSchema } from "../../_lib/ops-store";
+import { accessFromRequest } from "../../_lib/device-auth";
+import { ensureOpsSchema, runOpsMaintenance } from "../../_lib/ops-store";
 
 export const dynamic = "force-dynamic";
 
 type Sql = Awaited<ReturnType<typeof ensureOpsSchema>>;
+type ReadOptions = { section?: number; includeLogs?: boolean; knownVersion?: number };
 
 type FoodRow = {
   id: number | string;
@@ -36,25 +38,42 @@ function foodJson(row: FoodRow) {
   };
 }
 
-async function readState(sql: Sql) {
-  const [service] = await sql`SELECT version FROM buffet_service WHERE id=1`;
-  const foods = await sql`
-    SELECT id,name,category,section,status,kitchen,start_at,requested_at,preparing_at,ready_at,stopped_at,closed_at
-    FROM buffet_foods
-    WHERE active=true
-    ORDER BY sort_order,id
-  `;
-  const logs = await sql`
-    SELECT created_at,action,food_name,section_label,detail
-    FROM buffet_events
-    ORDER BY id DESC
-    LIMIT 100
-  `;
+function sectionValue(value: unknown) {
+  const section = Number(value || 0);
+  return section === 1 || section === 2 ? section : 0;
+}
+
+async function readState(sql: Sql, options: ReadOptions = {}) {
+  const section = sectionValue(options.section);
+  const version = options.knownVersion ?? Number((await sql`SELECT version FROM buffet_service WHERE id=1`)[0]?.version || 0);
+  const foods = section
+    ? await sql`
+        SELECT id,name,category,section,status,kitchen,start_at,requested_at,preparing_at,ready_at,stopped_at,closed_at
+        FROM buffet_foods
+        WHERE active=true AND section=${section}
+        ORDER BY sort_order,id
+      `
+    : await sql`
+        SELECT id,name,category,section,status,kitchen,start_at,requested_at,preparing_at,ready_at,stopped_at,closed_at
+        FROM buffet_foods
+        WHERE active=true
+        ORDER BY sort_order,id
+      `;
+
+  let logs: any[] = [];
+  if (options.includeLogs !== false) {
+    logs = await sql`
+      SELECT created_at,action,food_name,section_label,detail
+      FROM buffet_events
+      ORDER BY id DESC
+      LIMIT 100
+    ` as any[];
+  }
 
   return {
     state: {
       foods: (foods as FoodRow[]).map(foodJson),
-      logs: (logs as any[]).map((row) => ({
+      logs: logs.map((row) => ({
         at: Number(row.created_at || 0),
         action: row.action || "",
         food: row.food_name || "Store",
@@ -62,12 +81,12 @@ async function readState(sql: Sql) {
         detail: row.detail || "",
       })),
     },
-    updatedAt: Number(service?.version || 0),
+    updatedAt: version,
   };
 }
 
-async function conflict(sql: Sql) {
-  return Response.json({ error: "STATE_CONFLICT", ...(await readState(sql)) }, { status: 409 });
+async function conflict(sql: Sql, options: ReadOptions = {}) {
+  return Response.json({ error: "STATE_CONFLICT", ...(await readState(sql, options)) }, { status: 409 });
 }
 
 function successVersion(rows: any): number {
@@ -78,13 +97,17 @@ function successVersion(rows: any): number {
 export async function GET(request: Request) {
   try {
     const sql = await ensureOpsSchema();
-    const since = Number(new URL(request.url).searchParams.get("since") || 0);
+    const url = new URL(request.url);
+    const since = Number(url.searchParams.get("since") || 0);
+    const section = sectionValue(url.searchParams.get("section"));
+    const includeLogs = url.searchParams.get("logs") !== "0";
     if (since > 0) {
       const [service] = await sql`SELECT version FROM buffet_service WHERE id=1`;
       const current = Number(service?.version || 0);
       if (current === since) return Response.json({ unchanged: true, updatedAt: current });
+      return Response.json(await readState(sql, { section, includeLogs, knownVersion: current }));
     }
-    return Response.json(await readState(sql));
+    return Response.json(await readState(sql, { section, includeLogs }));
   } catch (error) {
     console.error("ops/live GET failed", error);
     return Response.json({ error: error instanceof Error ? error.message : "Database unavailable" }, { status: 500 });
@@ -97,7 +120,22 @@ export async function POST(request: Request) {
     const sql = await ensureOpsSchema();
     const expected = Number(body.expectedUpdatedAt || 0);
     const action = String(body.action || "");
+    const mutationId = String(body.mutationId || "").trim().slice(0, 160);
+    const responseSection = sectionValue(body.responseSection);
+    const includeLogs = body.includeLogs !== false;
+    const responseOptions = { section: responseSection, includeLogs };
+    const device = accessFromRequest(request);
+    const deviceId = String(device?.deviceId || "").slice(0, 120);
     const now = Date.now();
+
+    if (mutationId) {
+      const [prior] = await sql`SELECT response_version FROM ops_mutations WHERE mutation_id=${mutationId} LIMIT 1`;
+      if (prior) {
+        const state = await readState(sql, responseOptions);
+        return Response.json({ ...state, duplicate: true });
+      }
+    }
+
     let result: any = [];
 
     if (action === "status") {
@@ -325,8 +363,18 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unknown action" }, { status: 400 });
     }
 
-    if (!successVersion(result)) return conflict(sql);
-    return Response.json(await readState(sql));
+    const version = successVersion(result);
+    if (!version) return conflict(sql, responseOptions);
+
+    if (mutationId) {
+      await sql`
+        INSERT INTO ops_mutations(mutation_id,created_at,device_id,response_version)
+        VALUES (${mutationId},${now},${deviceId},${version})
+        ON CONFLICT (mutation_id) DO UPDATE SET response_version=GREATEST(ops_mutations.response_version,EXCLUDED.response_version)
+      `;
+    }
+    void runOpsMaintenance(sql);
+    return Response.json(await readState(sql, { ...responseOptions, knownVersion: version }));
   } catch (error) {
     console.error("ops/live POST failed", error);
     return Response.json({ error: error instanceof Error ? error.message : "Database unavailable" }, { status: 500 });
