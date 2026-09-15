@@ -34,6 +34,7 @@ class KitchenAlertBootstrapActivity : ComponentActivity() {
         }
 
         KitchenAlertMonitor.start(applicationContext)
+        PrepRecovery.start(applicationContext)
         AppUpdater.startPeriodic(applicationContext)
 
         lifecycleScope.launch {
