@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-const ACCESS_TTL_MS = 20 * 60 * 1000;
+const ACCESS_TTL_MS = 3 * 60 * 1000;
 
 function secret() {
   return process.env.ADMIN_SESSION_SECRET || "";
