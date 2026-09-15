@@ -121,7 +121,7 @@ private fun optimisticFast(s:FSnap?,spec:String,id:Int):FSnap?{if(s==null)return
 
 class FastApi(ctx:Context){
     private val base="https://bbqtowndickson.com";private val prefs=ctx.getSharedPreferences("bbqtown_ops_cache",Context.MODE_PRIVATE);private val media="application/json; charset=utf-8".toMediaType();private val client=OkHttpClient.Builder().connectTimeout(4,TimeUnit.SECONDS).readTimeout(5,TimeUnit.SECONDS).writeTimeout(5,TimeUnit.SECONDS).retryOnConnectionFailure(true).build()
-    suspend fun loadLive():FSnap=withContext(Dispatchers.IO){parseSnap(JSONObject(req("GET","/api/ops/live",null)))}
+    suspend fun loadLive():FSnap=withContext(Dispatchers.IO){val cached=cachedLive();val path=if(cached!=null&&cached.updatedAt>0)"/api/ops/live?since=${cached.updatedAt}" else "/api/ops/live";val root=JSONObject(req("GET",path,null));if(root.optBoolean("unchanged")&&cached!=null)cached else parseSnap(root)}
     suspend fun action(s:FSnap?,spec:String,id:Int):FSnap=withContext(Dispatchers.IO){val b=JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0);if(spec.startsWith("status:"))b.put("action","status").put("status",spec.substringAfter(':')).put("id",id)else b.put("action",spec).put("id",id);postLive(b)}
     suspend fun addDish(s:FSnap?,n:String,c:String,sec:Int)=withContext(Dispatchers.IO){postLive(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("action","dish_add").put("name",n).put("category",c).put("section",sec))}
     suspend fun updateDish(s:FSnap?,id:Int,n:String,c:String,sec:Int)=withContext(Dispatchers.IO){postLive(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("action","dish_update").put("id",id).put("name",n).put("category",c).put("section",sec))}
