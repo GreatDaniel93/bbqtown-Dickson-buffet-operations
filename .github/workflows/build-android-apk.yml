@@ -8,6 +8,9 @@ on:
       - '.github/workflows/build-android-apk.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -42,9 +45,36 @@ jobs:
       - name: Rename APK
         run: cp android-app/app/build/outputs/apk/debug/app-debug.apk BBQTown-Dickson-Ops.apk
 
-      - name: Upload APK
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' android-app/app/build.gradle.kts | head -1)
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android-app/app/build.gradle.kts | head -1)
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: BBQTown-Dickson-Ops-APK
           path: BBQTown-Dickson-Ops.apk
           retention-days: 30
+
+      - name: Publish in-app update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        shell: bash
+        run: |
+          TAG="ops-v${VERSION_CODE}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" BBQTown-Dickson-Ops.apk --clobber
+            gh release edit "$TAG" --title "BBQ Town Ops ${VERSION_NAME}"
+          else
+            gh release create "$TAG" BBQTown-Dickson-Ops.apk \
+              --title "BBQ Town Ops ${VERSION_NAME}" \
+              --notes "BBQ Town Dickson operations app build ${VERSION_CODE}. Published automatically for on-device updates." \
+              --latest
+          fi
