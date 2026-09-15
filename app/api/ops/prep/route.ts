@@ -1,7 +1,26 @@
+import { accessFromRequest } from "../../_lib/device-auth";
 import { ensureOpsSchema } from "../../_lib/ops-store";
 
 export const dynamic = "force-dynamic";
 const clean=(v:unknown,n=500)=>String(v??"").trim().slice(0,n);
+let mutationPayloadReady:Promise<void>|null=null;
+
+async function ensureMutationPayload(sql:Awaited<ReturnType<typeof ensureOpsSchema>>){
+  if(!mutationPayloadReady){
+    mutationPayloadReady=(async()=>{
+      await sql`ALTER TABLE ops_mutations ADD COLUMN IF NOT EXISTS response_payload jsonb NOT NULL DEFAULT '{}'::jsonb`;
+    })().catch((error)=>{mutationPayloadReady=null;throw error});
+  }
+  await mutationPayloadReady;
+}
+
+async function replayMutation(sql:Awaited<ReturnType<typeof ensureOpsSchema>>,mutationId:string){
+  if(!mutationId)return null;
+  const [row]=await sql`SELECT response_payload FROM ops_mutations WHERE mutation_id=${mutationId} LIMIT 1`;
+  if(!row)return null;
+  const payload=row.response_payload as Record<string,unknown>|null;
+  return payload&&Object.keys(payload).length?payload:{error:"MUTATION_IN_PROGRESS"};
+}
 
 export async function GET(request:Request){
   try{
@@ -18,16 +37,89 @@ export async function GET(request:Request){
 
 export async function POST(request:Request){
   try{
-    const body=await request.json(); const sql=await ensureOpsSchema(); const action=clean(body.action,40); const now=Date.now();
+    const body=await request.json();
+    const sql=await ensureOpsSchema();
+    const action=clean(body.action,40);
+    const now=Date.now();
+    const mutationId=clean(body.mutationId,160);
+    const deviceId=clean(accessFromRequest(request)?.deviceId,120);
+
+    if(mutationId){
+      await ensureMutationPayload(sql);
+      const replay=await replayMutation(sql,mutationId);
+      if(replay&&!(replay as any).error)return Response.json(replay);
+      if(replay&&(replay as any).error==='MUTATION_IN_PROGRESS')return Response.json(replay,{status:409});
+    }
+
     if(action==='add'){
-      const prepDate=clean(body.prepDate,20),item=clean(body.item,180); if(!prepDate||!item)return Response.json({error:'prepDate and item required'},{status:400});
+      const prepDate=clean(body.prepDate,20),item=clean(body.item,180);
+      if(!prepDate||!item)return Response.json({error:'prepDate and item required'},{status:400});
       const section=clean(body.section,20).toUpperCase()||'ALL';
-      const [created]=await sql`INSERT INTO kitchen_prep_items (prep_date,section,item,quantity,notes,sort_order,created_at,created_by) VALUES (${prepDate},${section},${item},${clean(body.quantity,80)},${clean(body.notes,600)},${Number(body.sortOrder)||0},${now},${clean(body.createdBy,120)}) RETURNING *`;
+      const quantity=clean(body.quantity,80),notes=clean(body.notes,600),createdBy=clean(body.createdBy,120),sortOrder=Number(body.sortOrder)||0;
+
+      if(mutationId){
+        const rows=await sql`
+          WITH claim AS (
+            INSERT INTO ops_mutations(mutation_id,created_at,device_id,response_version,response_payload)
+            VALUES (${mutationId},${now},${deviceId},0,'{}'::jsonb)
+            ON CONFLICT (mutation_id) DO NOTHING
+            RETURNING mutation_id
+          ), created AS (
+            INSERT INTO kitchen_prep_items (prep_date,section,item,quantity,notes,sort_order,created_at,created_by)
+            SELECT ${prepDate},${section},${item},${quantity},${notes},${sortOrder},${now},${createdBy}
+            WHERE EXISTS (SELECT 1 FROM claim)
+            RETURNING *
+          ), saved AS (
+            UPDATE ops_mutations m
+            SET response_payload=jsonb_build_object('ok',true,'item',to_jsonb(created))
+            FROM created
+            WHERE m.mutation_id=${mutationId}
+            RETURNING m.response_payload
+          )
+          SELECT response_payload FROM saved
+        `;
+        if(rows.length)return Response.json(rows[0].response_payload);
+        const replay=await replayMutation(sql,mutationId);
+        return Response.json(replay||{error:'MUTATION_IN_PROGRESS'},{status:replay&&(replay as any).error?409:200});
+      }
+
+      const [created]=await sql`INSERT INTO kitchen_prep_items (prep_date,section,item,quantity,notes,sort_order,created_at,created_by) VALUES (${prepDate},${section},${item},${quantity},${notes},${sortOrder},${now},${createdBy}) RETURNING *`;
       return Response.json({ok:true,item:created});
     } else if(action==='toggle'){
       const id=Number(body.id); if(!id)return Response.json({error:'id required'},{status:400});
       const completed=!!body.completed;
-      const [updated]=await sql`UPDATE kitchen_prep_items SET completed=${completed},completed_at=${completed?now:null},completed_by=${completed?clean(body.completedBy,120):''} WHERE id=${id} RETURNING *`;
+      const completedBy=completed?clean(body.completedBy,120):'';
+
+      if(mutationId){
+        const rows=await sql`
+          WITH claim AS (
+            INSERT INTO ops_mutations(mutation_id,created_at,device_id,response_version,response_payload)
+            VALUES (${mutationId},${now},${deviceId},0,'{}'::jsonb)
+            ON CONFLICT (mutation_id) DO NOTHING
+            RETURNING mutation_id
+          ), updated AS (
+            UPDATE kitchen_prep_items item
+            SET completed=${completed},completed_at=${completed?now:null},completed_by=${completedBy}
+            WHERE item.id=${id} AND EXISTS (SELECT 1 FROM claim)
+            RETURNING item.*
+          ), saved AS (
+            UPDATE ops_mutations m
+            SET response_payload=jsonb_build_object('ok',true,'item',to_jsonb(updated))
+            FROM updated
+            WHERE m.mutation_id=${mutationId}
+            RETURNING m.response_payload
+          )
+          SELECT response_payload FROM saved
+        `;
+        if(rows.length)return Response.json(rows[0].response_payload);
+        const replay=await replayMutation(sql,mutationId);
+        if(replay&&!(replay as any).error)return Response.json(replay);
+        const [exists]=await sql`SELECT id FROM kitchen_prep_items WHERE id=${id}`;
+        if(!exists)return Response.json({error:'Prep item not found'},{status:404});
+        return Response.json(replay||{error:'MUTATION_IN_PROGRESS'},{status:409});
+      }
+
+      const [updated]=await sql`UPDATE kitchen_prep_items SET completed=${completed},completed_at=${completed?now:null},completed_by=${completedBy} WHERE id=${id} RETURNING *`;
       if(!updated)return Response.json({error:'Prep item not found'},{status:404});
       return Response.json({ok:true,item:updated});
     } else if(action==='delete'){
@@ -53,5 +145,8 @@ export async function POST(request:Request){
       `;
       return Response.json({ok:true,inserted:inserted.length});
     } else return Response.json({error:'Unknown action'},{status:400});
-  }catch(error){return Response.json({error:error instanceof Error?error.message:'Database unavailable'},{status:500})}
+  }catch(error){
+    console.error('ops/prep POST failed',error);
+    return Response.json({error:error instanceof Error?error.message:'Database unavailable'},{status:500});
+  }
 }
