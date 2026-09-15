@@ -78,23 +78,24 @@ private fun KitchenBoardScreen(onDevice: () -> Unit) {
         }
     }
     val scope = rememberCoroutineScope()
-    var snap by remember { mutableStateOf(api.cachedLive()) }
-    var pending by remember { mutableIntStateOf(0) }
+    var snap by remember { mutableStateOf(api.cachedLive(section)) }
+    var pending by remember { mutableIntStateOf(api.pendingLiveCount()) }
     var error by remember { mutableStateOf<String?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     LaunchedEffect(section) {
         while (true) {
             now = System.currentTimeMillis()
-            if (pending == 0) {
-                try {
-                    val fresh = api.loadLive()
-                    snap = fresh
-                    api.cacheLive(fresh)
-                    error = null
-                } catch (e: Exception) {
-                    error = e.message
-                }
+            pending = api.pendingLiveCount()
+            try {
+                val fresh = api.loadLive(section)
+                snap = fresh
+                api.cacheLive(fresh, section)
+                pending = api.pendingLiveCount()
+                error = if (pending > 0) "$pending offline action(s) queued" else null
+            } catch (e: Exception) {
+                pending = api.pendingLiveCount()
+                error = e.message
             }
             delay(4000)
         }
@@ -103,23 +104,18 @@ private fun KitchenBoardScreen(onDevice: () -> Unit) {
     fun act(spec: String, id: Int) {
         val before = snap
         snap = kitchenOptimistic(snap, spec, id)
-        snap?.let(api::cacheLive)
-        pending++
+        snap?.let { api.cacheLive(it, section) }
+        pending = api.pendingLiveCount() + 1
         scope.launch {
             try {
-                val server = api.action(before, spec, id)
+                val server = api.action(before, spec, id, section)
                 snap = server
-                api.cacheLive(server)
-                error = null
+                api.cacheLive(server, section)
+                pending = api.pendingLiveCount()
+                error = if (pending > 0) "$pending offline action(s) queued" else null
             } catch (e: Exception) {
+                pending = api.pendingLiveCount()
                 error = e.message
-                try {
-                    val fresh = api.loadLive()
-                    snap = fresh
-                    api.cacheLive(fresh)
-                } catch (_: Exception) {}
-            } finally {
-                pending--
             }
         }
     }
