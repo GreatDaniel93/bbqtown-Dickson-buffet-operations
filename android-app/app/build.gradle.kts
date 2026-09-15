@@ -12,12 +12,13 @@ android {
         applicationId = "com.bbqtown.dickson.ops"
         minSdk = 24
         targetSdk = 35
-        versionCode = 21
-        versionName = "2.0.0-alpha5.10"
+        versionCode = 22
+        versionName = "2.0.0-alpha5.11"
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
