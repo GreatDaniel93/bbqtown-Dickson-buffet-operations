@@ -14,6 +14,7 @@ export function getOpsSql(): NeonQueryFunction<false, false> {
 }
 
 let schemaReady: Promise<void> | null = null;
+let maintenanceAt = 0;
 
 export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>> {
   const sql = getOpsSql();
@@ -28,7 +29,10 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
           to_regclass('public.buffet_foods') AS live_foods,
           to_regclass('public.buffet_events') AS live_events,
           to_regclass('public.buffet_foods_kitchen_idx') AS live_marker,
-          to_regclass('public.kitchen_prep_lookup_idx') AS prep_marker
+          to_regclass('public.kitchen_prep_lookup_idx') AS prep_marker,
+          to_regclass('public.ops_devices_refresh_idx') AS device_security_marker,
+          to_regclass('public.ops_mutations_created_idx') AS mutation_marker,
+          to_regclass('public.buffet_event_daily') AS archive_marker
       `;
       if (
         probe?.core &&
@@ -38,12 +42,19 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
         probe?.live_foods &&
         probe?.live_events &&
         probe?.live_marker &&
-        probe?.prep_marker
+        probe?.prep_marker &&
+        probe?.device_security_marker &&
+        probe?.mutation_marker &&
+        probe?.archive_marker
       ) return;
 
       const now = Date.now();
       await sql.transaction([
         sql`CREATE TABLE IF NOT EXISTS ops_devices (device_id text PRIMARY KEY, role text NOT NULL, app_version text NOT NULL DEFAULT '', pending_tasks integer NOT NULL DEFAULT 0, online boolean NOT NULL DEFAULT true, last_seen bigint NOT NULL, meta jsonb NOT NULL DEFAULT '{}'::jsonb)`,
+        sql`ALTER TABLE ops_devices ADD COLUMN IF NOT EXISTS device_name text NOT NULL DEFAULT ''`,
+        sql`ALTER TABLE ops_devices ADD COLUMN IF NOT EXISTS refresh_token_hash text NOT NULL DEFAULT ''`,
+        sql`ALTER TABLE ops_devices ADD COLUMN IF NOT EXISTS revoked boolean NOT NULL DEFAULT false`,
+        sql`ALTER TABLE ops_devices ADD COLUMN IF NOT EXISTS paired_at bigint`,
         sql`CREATE TABLE IF NOT EXISTS ops_events (id bigserial PRIMARY KEY, created_at bigint NOT NULL, device_id text NOT NULL DEFAULT '', role text NOT NULL DEFAULT '', event_type text NOT NULL, label text NOT NULL DEFAULT '', payload jsonb NOT NULL DEFAULT '{}'::jsonb)`,
         sql`CREATE TABLE IF NOT EXISTS ops_checklists (id bigserial PRIMARY KEY, service_date text NOT NULL, checklist_type text NOT NULL, payload jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at bigint NOT NULL, UNIQUE(service_date, checklist_type))`,
         sql`CREATE TABLE IF NOT EXISTS ops_settings (setting_key text PRIMARY KEY, setting_value jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at bigint NOT NULL)`,
@@ -56,12 +67,9 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
         sql`CREATE TABLE IF NOT EXISTS ops_routine_logs (id bigserial PRIMARY KEY, routine_id bigint NOT NULL REFERENCES ops_routines(id) ON DELETE CASCADE, service_date text NOT NULL, completed_at bigint NOT NULL, completed_by text NOT NULL DEFAULT '', notes text NOT NULL DEFAULT '', UNIQUE(routine_id,service_date))`,
         sql`CREATE TABLE IF NOT EXISTS ops_automation_keys (automation_key text PRIMARY KEY, incident_id bigint, state text NOT NULL DEFAULT 'OPEN', created_at bigint NOT NULL, updated_at bigint NOT NULL)`,
         sql`CREATE TABLE IF NOT EXISTS kitchen_prep_items (id bigserial PRIMARY KEY, prep_date text NOT NULL, section text NOT NULL DEFAULT 'ALL', item text NOT NULL, quantity text NOT NULL DEFAULT '', notes text NOT NULL DEFAULT '', sort_order integer NOT NULL DEFAULT 0, created_at bigint NOT NULL, created_by text NOT NULL DEFAULT '', completed boolean NOT NULL DEFAULT false, completed_at bigint, completed_by text NOT NULL DEFAULT '')`,
+        sql`CREATE TABLE IF NOT EXISTS ops_mutations (mutation_id text PRIMARY KEY, created_at bigint NOT NULL, device_id text NOT NULL DEFAULT '', response_version bigint NOT NULL DEFAULT 0)`,
 
-        // Keep the legacy singleton during the migration window as a rollback source.
         sql`CREATE TABLE IF NOT EXISTS buffet_state (id integer PRIMARY KEY, payload jsonb NOT NULL, updated_at bigint NOT NULL, CONSTRAINT buffet_state_singleton CHECK (id = 1))`,
-
-        // V2 normalized live buffet tables. A tap now updates one food row instead of rewriting
-        // the full foods+logs JSON document.
         sql`CREATE TABLE IF NOT EXISTS buffet_service (
           id integer PRIMARY KEY,
           version bigint NOT NULL DEFAULT 0,
@@ -97,9 +105,21 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
           detail text NOT NULL DEFAULT '',
           meta jsonb NOT NULL DEFAULT '{}'::jsonb
         )`,
+        sql`CREATE TABLE IF NOT EXISTS buffet_event_daily (
+          service_date text NOT NULL,
+          action text NOT NULL,
+          section_label text NOT NULL DEFAULT 'All Sections',
+          event_count integer NOT NULL DEFAULT 0,
+          first_at bigint NOT NULL,
+          last_at bigint NOT NULL,
+          PRIMARY KEY(service_date, action, section_label)
+        )`,
 
         sql`CREATE INDEX IF NOT EXISTS ops_events_created_at_idx ON ops_events (created_at DESC)`,
         sql`CREATE INDEX IF NOT EXISTS ops_events_type_idx ON ops_events (event_type, created_at DESC)`,
+        sql`CREATE INDEX IF NOT EXISTS ops_devices_refresh_idx ON ops_devices (refresh_token_hash) WHERE refresh_token_hash <> ''`,
+        sql`CREATE INDEX IF NOT EXISTS ops_devices_seen_idx ON ops_devices (last_seen DESC)`,
+        sql`CREATE INDEX IF NOT EXISTS ops_mutations_created_idx ON ops_mutations (created_at DESC)`,
         sql`CREATE INDEX IF NOT EXISTS food_safety_created_at_idx ON food_safety_logs (created_at DESC)`,
         sql`CREATE INDEX IF NOT EXISTS food_safety_type_idx ON food_safety_logs (log_type, created_at DESC)`,
         sql`CREATE INDEX IF NOT EXISTS ops_incidents_status_idx ON ops_incidents (status, updated_at DESC)`,
@@ -112,12 +132,10 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
         sql`CREATE INDEX IF NOT EXISTS buffet_foods_kitchen_idx ON buffet_foods (kitchen, section, active)`,
         sql`CREATE INDEX IF NOT EXISTS buffet_events_created_at_idx ON buffet_events (created_at DESC, id DESC)`,
 
-        // Preserve the old version number so installed APKs can continue sending expectedUpdatedAt.
         sql`INSERT INTO buffet_service (id, version, is_open, mutation_token, updated_at)
             SELECT 1, COALESCE((SELECT updated_at FROM buffet_state WHERE id=1), 0), false, '', ${now}
             ON CONFLICT (id) DO NOTHING`,
 
-        // One-time server-side migration of the current food list from the legacy JSON document.
         sql`INSERT INTO buffet_foods (
               id, name, category, section, status, kitchen, start_at,
               requested_at, preparing_at, ready_at, stopped_at, closed_at,
@@ -150,7 +168,6 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
               true
             )`,
 
-        // Migrate only a bounded recent log window. New events are stored one row per action.
         sql`INSERT INTO buffet_events (created_at, action, food_name, section_label, detail)
             SELECT
               COALESCE(NULLIF(entry->>'at','')::bigint, legacy.updated_at),
@@ -178,4 +195,36 @@ export async function ensureOpsSchema(): Promise<NeonQueryFunction<false, false>
   }
   await schemaReady;
   return sql;
+}
+
+export async function runOpsMaintenance(sql: NeonQueryFunction<false, false>) {
+  const now = Date.now();
+  if (now - maintenanceAt < 6 * 60 * 60 * 1000) return;
+  maintenanceAt = now;
+  const eventCutoff = now - 90 * 24 * 60 * 60 * 1000;
+  const mutationCutoff = now - 14 * 24 * 60 * 60 * 1000;
+  try {
+    await sql.transaction([
+      sql`INSERT INTO buffet_event_daily(service_date,action,section_label,event_count,first_at,last_at)
+          SELECT
+            to_char(to_timestamp(created_at/1000.0) AT TIME ZONE 'Australia/Sydney','YYYY-MM-DD'),
+            action,
+            section_label,
+            COUNT(*)::integer,
+            MIN(created_at),
+            MAX(created_at)
+          FROM buffet_events
+          WHERE created_at < ${eventCutoff}
+          GROUP BY 1,2,3
+          ON CONFLICT(service_date,action,section_label) DO UPDATE SET
+            event_count=buffet_event_daily.event_count+EXCLUDED.event_count,
+            first_at=LEAST(buffet_event_daily.first_at,EXCLUDED.first_at),
+            last_at=GREATEST(buffet_event_daily.last_at,EXCLUDED.last_at)`,
+      sql`DELETE FROM buffet_events WHERE created_at < ${eventCutoff}`,
+      sql`DELETE FROM ops_mutations WHERE created_at < ${mutationCutoff}`,
+    ]);
+  } catch (error) {
+    maintenanceAt = 0;
+    console.error("ops maintenance failed", error);
+  }
 }
