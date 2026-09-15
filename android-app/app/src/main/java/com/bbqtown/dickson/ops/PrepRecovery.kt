@@ -38,9 +38,16 @@ object PrepRecovery {
         scope.launch {
             var failures = 0
             while (isActive) {
-                val recovered = runCatching { recoverOnce(app) }.getOrElse { 0 }
-                if (recovered >= 0) failures = 0 else failures++
-                val wait = if (failures == 0) 12_000L else minOf(60_000L, 5_000L shl minOf(failures - 1, 3))
+                val recovered = runCatching { recoverOnce(app) }.getOrElse { -1 }
+                if (recovered >= 0) failures = 0 else failures = (failures + 1).coerceAtMost(8)
+                val wait = when (failures) {
+                    0 -> 12_000L
+                    1 -> 5_000L
+                    2 -> 10_000L
+                    3 -> 20_000L
+                    4 -> 40_000L
+                    else -> 60_000L
+                }
                 delay(wait)
             }
         }
