@@ -94,14 +94,14 @@ data class FPrep(val id:Long,val section:String,val item:String,val quantity:Str
 @Composable private fun Status(t:String,c:Color){Surface(color=c.copy(alpha=.13f),shape=RoundedCornerShape(50)){Text(t,color=c,fontWeight=FontWeight.Black,fontSize=9.sp,modifier=Modifier.padding(horizontal=9.dp,vertical=5.dp))}}
 
 @Composable private fun KitchenFast(api:FastApi,section:Int,alert:()->Unit,onDevice:()->Unit,onPrep:()->Unit){
-    val scope=rememberCoroutineScope();var snap by remember{mutableStateOf(api.cachedLive())};var pending by remember{mutableIntStateOf(0)};var error by remember{mutableStateOf<String?>(null)};var oldNew by remember{mutableIntStateOf(-1)}
-    LaunchedEffect(Unit){while(true){if(pending==0)try{val f=api.loadLive();snap=f;api.cacheLive(f);error=null}catch(e:Exception){error=e.message};delay(4500)}}
+    val scope=rememberCoroutineScope();var snap by remember{mutableStateOf(api.cachedLive(section))};var pending by remember{mutableIntStateOf(0)};var error by remember{mutableStateOf<String?>(null)};var oldNew by remember{mutableIntStateOf(-1)}
+    LaunchedEffect(Unit){while(true){if(pending==0)try{val f=api.loadLive(section);snap=f;api.cacheLive(f,section);error=null}catch(e:Exception){error=e.message};delay(4500)}}
     val tasks=(snap?.foods?:emptyList()).filter{it.section==section&&it.kitchen!="idle"};val nc=tasks.count{it.kitchen=="requested"};LaunchedEffect(nc){if(oldNew>=0&&nc>oldNew)alert();oldNew=nc}
-    fun action(spec:String,id:Int){val before=snap;snap=optimisticFast(snap,spec,id);snap?.let{api.cacheLive(it)};pending++;scope.launch{try{val s=api.action(before,spec,id);snap=s;api.cacheLive(s);error=null}catch(e:Exception){error=e.message};pending--}}
+    fun action(spec:String,id:Int){val before=snap;snap=optimisticFast(snap,spec,id);snap?.let{api.cacheLive(it,section)};pending++;scope.launch{try{val s=api.action(before,spec,id,section);snap=s;api.cacheLive(s,section);error=null}catch(e:Exception){error=e.message};pending--}}
     Column(Modifier.fillMaxSize().background(FInk)){Header("KITCHEN $section","Local-first KDS",onDevice){SyncChip(pending,error);Button(onClick=onPrep,colors=ButtonDefaults.buttonColors(containerColor=FGold)){Text("PREP",color=FInk,fontWeight=FontWeight.Black)}};LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){items(tasks,key={it.id}){f->Surface(color=Color.White,shape=RoundedCornerShape(16.dp),border=BorderStroke(2.dp,if(f.status=="EMPTY")FRed else FGold)){Column(Modifier.padding(16.dp)){Row{Column(Modifier.weight(1f)){Text(f.name,fontWeight=FontWeight.Black,fontSize=21.sp);Text(if(f.status=="EMPTY")"EMPTY · URGENT" else "LOW · PREP NEXT",color=if(f.status=="EMPTY")FRed else FGold,fontWeight=FontWeight.Black,fontSize=10.sp)};Status(f.kitchen.uppercase(),if(f.kitchen=="ready")FGreen else if(f.kitchen=="preparing")FBlue else FGold)};Spacer(Modifier.height(12.dp));when(f.kitchen){"requested"->Button(onClick={action("kitchen_prepare",f.id)},modifier=Modifier.fillMaxWidth().height(56.dp),colors=ButtonDefaults.buttonColors(containerColor=FInk)){Text("START PREPARING",fontWeight=FontWeight.Black)};"preparing"->Button(onClick={action("kitchen_ready",f.id)},modifier=Modifier.fillMaxWidth().height(56.dp),colors=ButtonDefaults.buttonColors(containerColor=FGreen)){Text("MARK READY",fontWeight=FontWeight.Black)};else->Surface(color=FGreenSoft,shape=RoundedCornerShape(11.dp)){Box(Modifier.fillMaxWidth().height(56.dp),contentAlignment=Alignment.Center){Text("READY · WAITING FOR FOH",color=FGreen,fontWeight=FontWeight.Black)}}}}}}}}
 }
 
-@Composable private fun ManagerFast(openWeb:(String)->Unit,onDevice:()->Unit,onPrep:()->Unit,onDishes:()->Unit){Column(Modifier.fillMaxSize().background(FCanvas)){Header("STORE TOOLS","Manager controls",onDevice);Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){Tool("DISH SETUP","Add, edit or remove dishes",FGold,onDishes);Tool("KITCHEN PREP","Tomorrow prep list",FInk,onPrep);Tool("TABLES","Seating and table status",FBlue){openWeb("/tables.html")};Tool("BOOKINGS","Reservations",FGreen){openWeb("/reservations.html")};Tool("VERIFY VOUCHER","Voucher redemption",FBlue){openWeb("/vouchers")}}}}
+@Composable private fun ManagerFast(openWeb:(String)->Unit,onDevice:()->Unit,onPrep:()->Unit,onDishes:()->Unit){Column(Modifier.fillMaxSize().background(FCanvas)){Header("STORE TOOLS","Manager controls",onDevice);Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){Tool("DISH SETUP","Add, edit or remove dishes",FGold,onDishes);Tool("KITCHEN PREP","Tomorrow prep list",FInk,onPrep);Tool("TABLES","Seating and table status",FBlue){openWeb("/tables.html")};Tool("BOOKINGS","Reservations",FGreen){openWeb("/reservations.html")};Tool("VERIFY VOUCHER","Voucher redemption",FBlue){openWeb("/vouchers")};Tool("SYSTEM HEALTH","Devices, sync and app versions",FRed){openWeb("/system-health.html")}}}}
 @Composable private fun Tool(t:String,s:String,c:Color,on:()->Unit){Surface(Modifier.fillMaxWidth().clickable(onClick=on),color=Color.White,shape=RoundedCornerShape(15.dp),border=BorderStroke(1.dp,FLine)){Row(Modifier.padding(18.dp),verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(12.dp).background(c,CircleShape));Spacer(Modifier.width(14.dp));Column(Modifier.weight(1f)){Text(t,fontWeight=FontWeight.Black,fontSize=16.sp);Text(s,color=FMuted,fontSize=10.sp)};Text("›",color=c,fontSize=30.sp)}}}
 
 @Composable private fun PrepFast(api:FastApi,role:String,onBack:()->Unit){
@@ -120,21 +120,105 @@ data class FPrep(val id:Long,val section:String,val item:String,val quantity:Str
 private fun optimisticFast(s:FSnap?,spec:String,id:Int):FSnap?{if(s==null)return null;val now=System.currentTimeMillis();if(spec=="start_all")return s.copy(foods=s.foods.map{it.copy(status="GOOD",kitchen="idle",start=now,requestedAt=0)});if(spec=="close_all")return s.copy(foods=s.foods.map{it.copy(status="CLOSED",kitchen="idle",requestedAt=0)});return s.copy(foods=s.foods.map{f->if(f.id!=id)f else when{spec.startsWith("status:")->{val n=spec.substringAfter(':');if(n=="LOW"||n=="EMPTY")f.copy(status=n,kitchen=if(f.kitchen=="idle")"requested" else f.kitchen,requestedAt=if(f.kitchen=="idle")now else f.requestedAt)else f.copy(status="GOOD",kitchen=if(f.kitchen=="requested")"idle" else f.kitchen)};spec=="kitchen_prepare"->f.copy(kitchen="preparing");spec=="kitchen_ready"->f.copy(kitchen="ready");spec=="refilled"->f.copy(status="GOOD",kitchen="idle",start=now,requestedAt=0);else->f}})}
 
 class FastApi(ctx:Context){
-    private val base="https://bbqtowndickson.com";private val prefs=ctx.getSharedPreferences("bbqtown_ops_cache",Context.MODE_PRIVATE);private val media="application/json; charset=utf-8".toMediaType();private val client=OkHttpClient.Builder().connectTimeout(4,TimeUnit.SECONDS).readTimeout(5,TimeUnit.SECONDS).writeTimeout(5,TimeUnit.SECONDS).retryOnConnectionFailure(true).build()
-    suspend fun loadLive():FSnap=withContext(Dispatchers.IO){val cached=cachedLive();val path=if(cached!=null&&cached.updatedAt>0)"/api/ops/live?since=${cached.updatedAt}" else "/api/ops/live";val root=JSONObject(req("GET",path,null));if(root.optBoolean("unchanged")&&cached!=null)cached else parseSnap(root)}
-    suspend fun action(s:FSnap?,spec:String,id:Int):FSnap=withContext(Dispatchers.IO){val b=JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0);if(spec.startsWith("status:"))b.put("action","status").put("status",spec.substringAfter(':')).put("id",id)else b.put("action",spec).put("id",id);postLive(b)}
-    suspend fun addDish(s:FSnap?,n:String,c:String,sec:Int)=withContext(Dispatchers.IO){postLive(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("action","dish_add").put("name",n).put("category",c).put("section",sec))}
-    suspend fun updateDish(s:FSnap?,id:Int,n:String,c:String,sec:Int)=withContext(Dispatchers.IO){postLive(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("action","dish_update").put("id",id).put("name",n).put("category",c).put("section",sec))}
-    suspend fun deleteDish(s:FSnap?,id:Int)=withContext(Dispatchers.IO){postLive(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("action","dish_delete").put("id",id))}
-    private fun postLive(b:JSONObject):FSnap{var text=req("POST","/api/ops/live",b.toString(),allow409=true);var root=JSONObject(text);if(root.optString("error")=="STATE_CONFLICT"){b.put("expectedUpdatedAt",root.optLong("updatedAt",0));text=req("POST","/api/ops/live",b.toString());root=JSONObject(text)};if(root.has("error"))throw Exception(root.optString("error"));return parseSnap(root)}
+    private val app=ctx.applicationContext
+    private val base="https://bbqtowndickson.com"
+    private val prefs=app.getSharedPreferences("bbqtown_ops_cache",Context.MODE_PRIVATE)
+    private val media="application/json; charset=utf-8".toMediaType()
+    private val client=OkHttpClient.Builder().connectTimeout(4,TimeUnit.SECONDS).readTimeout(6,TimeUnit.SECONDS).writeTimeout(6,TimeUnit.SECONDS).retryOnConnectionFailure(true).build()
+    @Volatile private var failures=0
+    @Volatile private var backoffUntil=0L
+
+    private fun liveKey(section:Int)=if(section==1||section==2)"live:$section" else "live:all"
+    fun cachedLive(section:Int=0):FSnap?=runCatching{
+        val raw=prefs.getString(liveKey(section),null) ?: if(section==0)prefs.getString("live",null) else null
+        raw?.let{parseSnap(JSONObject(it))}
+    }.getOrNull()
+    fun cacheLive(s:FSnap,section:Int=0){prefs.edit().putString(liveKey(section),snapJson(s).toString()).apply();if(section==0)prefs.edit().putString("live",snapJson(s).toString()).apply()}
+
+    private fun queue():JSONArray=runCatching{JSONArray(prefs.getString("live_queue","[]"))}.getOrDefault(JSONArray())
+    @Synchronized private fun saveQueue(a:JSONArray){prefs.edit().putString("live_queue",a.toString()).apply()}
+    fun pendingLiveCount():Int=queue().length()
+    @Synchronized private fun enqueueLive(body:JSONObject){val a=queue();a.put(JSONObject(body.toString()));saveQueue(a)}
+
+    private fun recordSuccess(){failures=0;backoffUntil=0L}
+    private fun recordFailure(){failures=(failures+1).coerceAtMost(20);val baseDelay=when{failures<=1->5_000L;failures==2->10_000L;failures==3->20_000L;failures==4->40_000L;else->60_000L};backoffUntil=System.currentTimeMillis()+baseDelay+kotlin.random.Random.nextLong(0,1_500)}
+    private fun inBackoff()=System.currentTimeMillis()<backoffUntil
+
+    suspend fun loadLive(section:Int=0):FSnap=withContext(Dispatchers.IO){
+        var cached=cachedLive(section)
+        if(inBackoff()&&cached!=null)return@withContext cached
+        try{flushLiveQueue();cached=cachedLive(section)?:cached}catch(e:Exception){if(cached!=null)return@withContext cached else throw e}
+        DeviceSession.ensureAccessBlocking(app,pendingLiveCount())
+        val qs=buildString{append("logs=0");if(section==1||section==2)append("&section=$section");if(cached!=null&&cached.updatedAt>0)append("&since=${cached.updatedAt}")}
+        val root=JSONObject(req("GET","/api/ops/live?$qs",null))
+        val result=if(root.optBoolean("unchanged")&&cached!=null)cached else parseSnap(root)
+        cacheLive(result,section);result
+    }
+
+    suspend fun action(s:FSnap?,spec:String,id:Int,section:Int=0):FSnap=withContext(Dispatchers.IO){
+        val b=JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("mutationId",java.util.UUID.randomUUID().toString()).put("includeLogs",false)
+        if(section==1||section==2)b.put("responseSection",section)
+        if(spec.startsWith("status:"))b.put("action","status").put("status",spec.substringAfter(':')).put("id",id)else b.put("action",spec).put("id",id)
+        enqueueLive(b)
+        try{val result=flushLiveQueue()?:cachedLive(section)?:throw Exception("Queued for sync");cacheLive(result,section);result}catch(e:Exception){throw Exception("Saved offline · will retry automatically: ${e.message?:"network unavailable"}")}
+    }
+
+    suspend fun addDish(s:FSnap?,n:String,c:String,sec:Int)=withContext(Dispatchers.IO){postLiveDirect(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("mutationId",java.util.UUID.randomUUID().toString()).put("includeLogs",false).put("action","dish_add").put("name",n).put("category",c).put("section",sec))}
+    suspend fun updateDish(s:FSnap?,id:Int,n:String,c:String,sec:Int)=withContext(Dispatchers.IO){postLiveDirect(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("mutationId",java.util.UUID.randomUUID().toString()).put("includeLogs",false).put("action","dish_update").put("id",id).put("name",n).put("category",c).put("section",sec))}
+    suspend fun deleteDish(s:FSnap?,id:Int)=withContext(Dispatchers.IO){postLiveDirect(JSONObject().put("expectedUpdatedAt",s?.updatedAt?:0).put("mutationId",java.util.UUID.randomUUID().toString()).put("includeLogs",false).put("action","dish_delete").put("id",id))}
+
+    @Synchronized private fun flushLiveQueue():FSnap?{
+        if(inBackoff())throw Exception("Sync backing off")
+        var a=queue();var last:FSnap?=null
+        while(a.length()>0){
+            val body=a.optJSONObject(0)?:JSONObject()
+            val result=postLiveDirect(body)
+            val section=body.optInt("responseSection",0)
+            cacheLive(result,section)
+            val next=JSONArray();for(i in 1 until a.length())next.put(a.get(i));a=next;saveQueue(a);last=result
+        }
+        return last
+    }
+
+    private fun postLiveDirect(b:JSONObject):FSnap{
+        var text=req("POST","/api/ops/live",b.toString(),allow409=true)
+        var root=JSONObject(text)
+        if(root.optString("error")=="STATE_CONFLICT"){
+            b.put("expectedUpdatedAt",root.optLong("updatedAt",0))
+            text=req("POST","/api/ops/live",b.toString());root=JSONObject(text)
+        }
+        if(root.has("error"))throw Exception(root.optString("error"))
+        return parseSnap(root)
+    }
+
     suspend fun loadPrep(date:String,sec:String):List<FPrep> = withContext(Dispatchers.IO){val r=JSONObject(req("GET","/api/ops/prep?date=${Uri.encode(date)}&section=${Uri.encode(sec)}",null));parsePrepArray(r.optJSONArray("items")?:JSONArray())}
-    suspend fun addPrep(date:String,item:String,qty:String,notes:String,sec:String):FPrep=withContext(Dispatchers.IO){val r=JSONObject(req("POST","/api/ops/prep",JSONObject().put("action","add").put("prepDate",date).put("item",item).put("quantity",qty).put("notes",notes).put("section",sec).put("createdBy","Kitchen").toString()));parsePrep(r.getJSONObject("item"))}
-    suspend fun togglePrep(id:Long,done:Boolean):FPrep=withContext(Dispatchers.IO){val r=JSONObject(req("POST","/api/ops/prep",JSONObject().put("action","toggle").put("id",id).put("completed",done).put("completedBy","Kitchen").toString()));parsePrep(r.getJSONObject("item"))}
-    fun cachedLive():FSnap?=runCatching{prefs.getString("live",null)?.let{parseSnap(JSONObject(it))}}.getOrNull()
-    fun cacheLive(s:FSnap){prefs.edit().putString("live",snapJson(s).toString()).apply()}
+    suspend fun addPrep(date:String,item:String,qty:String,notes:String,sec:String):FPrep=withContext(Dispatchers.IO){val r=JSONObject(req("POST","/api/ops/prep",JSONObject().put("action","add").put("mutationId",java.util.UUID.randomUUID().toString()).put("prepDate",date).put("item",item).put("quantity",qty).put("notes",notes).put("section",sec).put("createdBy","Kitchen").toString()));parsePrep(r.getJSONObject("item"))}
+    suspend fun togglePrep(id:Long,done:Boolean):FPrep=withContext(Dispatchers.IO){val r=JSONObject(req("POST","/api/ops/prep",JSONObject().put("action","toggle").put("mutationId",java.util.UUID.randomUUID().toString()).put("id",id).put("completed",done).put("completedBy","Kitchen").toString()));parsePrep(r.getJSONObject("item"))}
     fun cachedPrep(date:String,sec:String):List<FPrep> = runCatching{parsePrepArray(JSONArray(prefs.getString("prep:$date:$sec","[]")))}.getOrDefault(emptyList())
     fun cachePrep(date:String,sec:String,list:List<FPrep>){val a=JSONArray();list.forEach{a.put(prepJson(it))};prefs.edit().putString("prep:$date:$sec",a.toString()).apply()}
-    private fun req(method:String,path:String,body:String?,allow409:Boolean=false):String{val rb=Request.Builder().url(base+path).header("User-Agent","BBQTownOpsAndroid/2.0 Native").header("Accept","application/json");if(method=="POST")rb.post((body?:"{}").toRequestBody(media))else rb.get();client.newCall(rb.build()).execute().use{r->val t=r.body?.string().orEmpty();if(!r.isSuccessful&&!(allow409&&r.code==409))throw Exception(runCatching{JSONObject(t).optString("error","Network error")}.getOrDefault("Network error"));return t}}
+
+    private fun req(method:String,path:String,body:String?,allow409:Boolean=false):String{
+        if(inBackoff())throw Exception("Sync temporarily paused after network errors")
+        val pending=pendingLiveCount()
+        var token=runCatching{DeviceSession.ensureAccessBlocking(app,pending)}.getOrElse{recordFailure();throw it}
+        if(token.isBlank())throw Exception("This tablet needs Manager pairing")
+        fun call(access:String):Pair<Int,String>{
+            val rb=Request.Builder().url(base+path).header("User-Agent","BBQTownOpsAndroid/${BuildConfig.VERSION_NAME} Native").header("Accept","application/json").header("x-bbqtown-device-token",access)
+            if(method=="POST")rb.post((body?:"{}").toRequestBody(media))else rb.get()
+            client.newCall(rb.build()).execute().use{r->return r.code to r.body?.string().orEmpty()}
+        }
+        try{
+            var result=call(token)
+            if(result.first==401){token=DeviceSession.ensureAccessBlocking(app,pending,force=true);if(token.isBlank())throw Exception("Device pairing expired");result=call(token)}
+            val code=result.first;val text=result.second
+            if(code in 200..299||(allow409&&code==409)){recordSuccess();return text}
+            val message=runCatching{JSONObject(text).optString("error","Network error $code")}.getOrDefault("Network error $code")
+            if(code==429||code>=500)recordFailure()
+            if(code==401)DeviceSession.clearPairing(app)
+            throw Exception(message)
+        }catch(e:Exception){if(!e.message.orEmpty().contains("pair",ignoreCase=true))recordFailure();throw e}
+    }
+
     private fun parseSnap(root:JSONObject):FSnap{val st=root.optJSONObject("state")?:JSONObject();val a=st.optJSONArray("foods")?:JSONArray();val f=buildList{for(i in 0 until a.length()){val x=a.optJSONObject(i)?:continue;add(FFood(x.optInt("id"),x.optString("name","Dish"),x.optString("category","Other"),x.optInt("section",1),x.optString("status","GOOD"),x.optString("kitchen","idle"),x.optLong("start",0),x.optLong("requestedAt",0)))}};return FSnap(f,root.optLong("updatedAt",0))}
     private fun snapJson(s:FSnap):JSONObject{val a=JSONArray();s.foods.forEach{f->a.put(JSONObject().put("id",f.id).put("name",f.name).put("category",f.category).put("section",f.section).put("status",f.status).put("kitchen",f.kitchen).put("start",f.start).put("requestedAt",f.requestedAt))};return JSONObject().put("state",JSONObject().put("foods",a)).put("updatedAt",s.updatedAt)}
     private fun parsePrepArray(a:JSONArray)=buildList{for(i in 0 until a.length()){val x=a.optJSONObject(i)?:continue;add(parsePrep(x))}}
