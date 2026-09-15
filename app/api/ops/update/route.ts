@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 const REPO = "GreatDaniel93/bbqtown-Dickson-buffet-operations";
+const SIGNED_MARKER = "BBQTOWN_SIGNED_RELEASE";
 
 export async function GET() {
   try {
@@ -18,9 +19,13 @@ export async function GET() {
     const release = await response.json() as {
       tag_name?: string;
       name?: string;
+      body?: string;
       published_at?: string;
       assets?: Array<{ name?: string; browser_download_url?: string; size?: number }>;
     };
+    if (!String(release.body || "").includes(SIGNED_MARKER)) {
+      return Response.json({ available: false, reason: "No stable-signed update published" });
+    }
     const versionCode = Number(String(release.tag_name || "").match(/ops-v(\d+)/)?.[1] || 0);
     const asset = (release.assets || []).find((item) => item.name === "BBQTown-Dickson-Ops.apk");
     if (!versionCode || !asset?.browser_download_url) return Response.json({ available: false });
@@ -31,6 +36,7 @@ export async function GET() {
       publishedAt: release.published_at || "",
       downloadUrl: asset.browser_download_url,
       size: Number(asset.size || 0),
+      signed: true,
     }, { headers: { "Cache-Control": "private, max-age=60" } });
   } catch (error) {
     console.error("update metadata failed", error);
