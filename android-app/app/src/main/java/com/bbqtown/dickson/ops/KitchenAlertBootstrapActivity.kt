@@ -9,31 +9,49 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Launcher + kitchen alert monitor. Kitchen roles use the dedicated three-lane KDS;
- * FOH/manager continue to use the premium operations activity.
+ * Launcher + kitchen alert monitor. Paired devices use signed credentials rather than
+ * the old User-Agent bypass. Kitchen roles use the dedicated three-lane KDS.
  */
 class KitchenAlertBootstrapActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        KitchenAlertMonitor.start(applicationContext)
+        KitchenAlertChannels.ensure(applicationContext)
 
-        val role = getSharedPreferences("bbqtown_ops_v2", Context.MODE_PRIVATE)
-            .getString("role", "").orEmpty()
-        val target = if (role == "s1" || role == "s2") {
-            KitchenBoardActivity::class.java
-        } else {
-            PremiumOpsActivity::class.java
+        if (!DeviceSession.isPaired(this)) {
+            startActivity(Intent(this, DevicePairingActivity::class.java))
+            finish()
+            return
         }
-        startActivity(Intent(this, target))
-        finish()
+
+        KitchenAlertMonitor.start(applicationContext)
+        AppUpdater.startPeriodic(applicationContext)
+
+        lifecycleScope.launch {
+            val update = AppUpdater.known(this@KitchenAlertBootstrapActivity) ?: withTimeoutOrNull(2_500L) {
+                runCatching { AppUpdater.check(this@KitchenAlertBootstrapActivity) }.getOrNull()
+            }
+            if (update != null) {
+                startActivity(Intent(this@KitchenAlertBootstrapActivity, AppUpdateActivity::class.java))
+                finish()
+                return@launch
+            }
+
+            val role = getSharedPreferences("bbqtown_ops_v2", Context.MODE_PRIVATE)
+                .getString("role", "").orEmpty()
+            val target = if (role == "s1" || role == "s2") KitchenBoardActivity::class.java else PremiumOpsActivity::class.java
+            startActivity(Intent(this@KitchenAlertBootstrapActivity, target))
+            finish()
+        }
     }
 }
 
@@ -68,7 +86,7 @@ object KitchenAlertMonitor {
                     initialized = true
                     lastSection = section
                     seenRequests = if (section == 0) emptySet() else {
-                        api.cachedLive()?.foods.orEmpty()
+                        api.cachedLive(section)?.foods.orEmpty()
                             .filter { it.section == section && it.kitchen == "requested" }
                             .map { "${it.id}:${it.requestedAt}" }.toSet()
                     }
@@ -90,7 +108,7 @@ object KitchenAlertMonitor {
                     continue
                 }
 
-                val requested = api.cachedLive()?.foods.orEmpty()
+                val requested = api.cachedLive(section)?.foods.orEmpty()
                     .filter { it.section == section && it.kitchen == "requested" }
                 val requestKeys = requested.map { "${it.id}:${it.requestedAt}" }.toSet()
                 val newRequests = requested.filter { "${it.id}:${it.requestedAt}" !in seenRequests }
@@ -114,6 +132,7 @@ object KitchenAlertMonitor {
     }
 
     private suspend fun playAlert(context: Context, urgent: Boolean) {
+        KitchenAlertChannels.notifyKitchen(context, urgent)
         try {
             val toneType = if (urgent) ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD else ToneGenerator.TONE_PROP_BEEP2
             val repeats = if (urgent) 3 else 2
