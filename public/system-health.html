@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#142018" />
+  <title>BBQ Town · System Health</title>
+  <style>
+    *{box-sizing:border-box}html{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f1e8;color:#142018}body{margin:0;min-height:100vh}.top{background:#142018;color:#fff;padding:18px}.topin{max-width:1050px;margin:auto;display:flex;gap:14px;align-items:center}.top h1{margin:0;font-size:22px}.top p{margin:3px 0 0;color:#b9c5bc;font-size:11px}.top a{margin-left:auto;color:#fff;text-decoration:none;font-weight:900;font-size:11px;border:1px solid #ffffff2a;border-radius:10px;padding:10px 12px}.wrap{max-width:1050px;margin:auto;padding:20px 16px 40px}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}.metric{background:#fff;border:1px solid #e2ddd1;border-radius:14px;padding:15px}.metric b{display:block;font-size:21px}.metric span{font-size:9px;color:#6f746e;font-weight:900;letter-spacing:.08em}.ok{color:#27734a}.bad{color:#b5372f}.warn{color:#c18a2c}.panel{background:#fff;border:1px solid #e2ddd1;border-radius:16px;overflow:hidden}.panelhead{display:flex;align-items:center;padding:15px 16px;border-bottom:1px solid #eee9df}.panelhead h2{margin:0;font-size:17px}.panelhead button{margin-left:auto;border:0;border-radius:9px;padding:9px 12px;background:#142018;color:#fff;font-weight:900;cursor:pointer}.device{display:grid;grid-template-columns:1.2fr .75fr .8fr .8fr .8fr auto;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid #f0ece4}.device:last-child{border-bottom:0}.name{font-weight:900}.sub{font-size:9px;color:#6f746e;margin-top:3px}.pill{display:inline-block;border-radius:999px;padding:5px 8px;font-size:8px;font-weight:900}.pill.ok{background:#e8f4eb}.pill.bad{background:#ffe9e6}.pill.warn{background:#fff1d8}.label{font-size:8px;color:#8a8e89;text-transform:uppercase;font-weight:900;letter-spacing:.08em}.value{font-size:11px;font-weight:800;margin-top:3px}.action{border:1px solid #e2ddd1;background:#fff;border-radius:8px;padding:8px 10px;font-weight:900;font-size:9px;cursor:pointer}.action.danger{color:#b5372f}.empty{padding:30px;text-align:center;color:#6f746e}.note{margin-top:13px;font-size:10px;color:#6f746e;line-height:1.5}.update{margin:0 0 14px;background:#fff;border:1px solid #e2ddd1;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px}.update strong{font-size:13px}.update span{font-size:10px;color:#6f746e}.dot{width:10px;height:10px;border-radius:50%;background:#27734a}@media(max-width:760px){.summary{grid-template-columns:repeat(2,1fr)}.device{grid-template-columns:1fr 1fr}.device>div:first-child{grid-column:1/-1}.action{justify-self:start}.label{margin-top:4px}}
+  </style>
+</head>
+<body>
+<header class="top"><div class="topin"><div><h1>BBQ TOWN · SYSTEM HEALTH</h1><p>Dickson operations devices, database and app versions</p></div><a href="/staff.html">← STAFF TOOLS</a></div></header>
+<main class="wrap">
+  <section class="summary">
+    <div class="metric"><span>DATABASE / API</span><b id="db" class="warn">CHECKING</b></div>
+    <div class="metric"><span>HEALTHY DEVICES</span><b id="healthy">—</b></div>
+    <div class="metric"><span>OFFLINE / REVOKED</span><b id="offline">—</b></div>
+    <div class="metric"><span>PENDING OFFLINE ACTIONS</span><b id="pending">—</b></div>
+  </section>
+  <div class="update"><div class="dot"></div><div><strong id="release">Checking latest app release…</strong><br><span id="releaseSub">Installed versions are shown per device below.</span></div></div>
+  <section class="panel">
+    <div class="panelhead"><h2>Paired tablets</h2><button id="refresh">REFRESH</button></div>
+    <div id="devices" class="empty">Loading devices…</div>
+  </section>
+  <div class="note">Healthy means the tablet checked in during the last 2 minutes. Pending actions are operations saved locally while a tablet is offline; alpha5.11 and later automatically retry them. Revoking a tablet prevents it from obtaining new signed access tokens.</div>
+</main>
+<script>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const age=ms=>{const s=Math.max(0,Math.floor(ms/1000));if(s<60)return s+'s ago';const m=Math.floor(s/60);if(m<60)return m+'m ago';const h=Math.floor(m/60);return h+'h '+(m%60)+'m ago'};
+async function control(id,revoked){const r=await fetch('/api/ops/devices',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:revoked?'restore':'revoke',deviceId:id})});if(!r.ok)alert((await r.json().catch(()=>({}))).error||'Device action failed');await load();}
+async function load(){
+  const db=document.getElementById('db');
+  try{
+    const r=await fetch('/api/ops/devices',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const data=await r.json();const now=Number(data.now||Date.now());const devices=data.devices||[];
+    db.textContent='ONLINE';db.className='ok';
+    const healthy=devices.filter(d=>d.healthy).length;const offline=devices.length-healthy;const pending=devices.reduce((n,d)=>n+Number(d.pending_tasks||0),0);
+    document.getElementById('healthy').textContent=healthy;document.getElementById('offline').textContent=offline;document.getElementById('pending').textContent=pending;
+    const box=document.getElementById('devices');
+    if(!devices.length){box.className='empty';box.innerHTML='No paired tablets yet. Install alpha5.11 and pair each tablet with the Manager PIN.';return}
+    box.className='';box.innerHTML=devices.map(d=>{
+      const state=d.revoked?'<span class="pill bad">REVOKED</span>':d.healthy?'<span class="pill ok">ONLINE</span>':'<span class="pill warn">OFFLINE</span>';
+      const id=esc(d.device_id);return `<div class="device"><div><div class="name">${esc(d.device_name||d.role||'Tablet')} ${state}</div><div class="sub">${id.slice(0,8)} · paired ${d.paired_at?age(now-Number(d.paired_at)):'legacy/unpaired'}</div></div><div><div class="label">Role</div><div class="value">${esc(d.role||'—')}</div></div><div><div class="label">App</div><div class="value">${esc(d.app_version||'—')}</div></div><div><div class="label">Last seen</div><div class="value">${d.last_seen?age(now-Number(d.last_seen)):'—'}</div></div><div><div class="label">Pending</div><div class="value ${Number(d.pending_tasks||0)>0?'warn':''}">${Number(d.pending_tasks||0)}</div></div><button class="action ${d.revoked?'':'danger'}" onclick='control(${JSON.stringify(String(d.device_id))},${!!d.revoked})'>${d.revoked?'RESTORE':'REVOKE'}</button></div>`
+    }).join('');
+  }catch(e){db.textContent='ERROR';db.className='bad';document.getElementById('devices').className='empty';document.getElementById('devices').textContent='Cannot reach operations database: '+e.message}
+  try{const r=await fetch('/api/ops/update',{cache:'no-store'});const u=await r.json();document.getElementById('release').textContent=u.available?`Latest app release · ${u.versionName||('build '+u.versionCode)}`:'No published in-app release yet';document.getElementById('releaseSub').textContent=u.available?`Build code ${u.versionCode} · tablets check automatically every 30 minutes`:'The next successful Android build will publish the first self-update release.'}catch(_){document.getElementById('release').textContent='Update service unavailable'}
+}
+document.getElementById('refresh').onclick=load;load();setInterval(load,30000);
+</script>
+</body>
+</html>
