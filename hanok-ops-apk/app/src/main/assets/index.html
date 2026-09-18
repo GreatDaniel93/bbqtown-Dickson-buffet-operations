@@ -86,7 +86,8 @@ async function loadTickets(silent=false){
     tickets=data||[];if(!silent)render();else if(page==="home"||page==="tickets")render();
   }catch(e){if(!silent)toast(e.message)}
 }
-async function loadNotifications(silent=false){if(!profile||profile.role==="pending")return;try{notifications=await api("/rest/v1/ops_notifications?select=id,ticket_id,kind,title,body,priority,read_at,created_at,data&order=created_at.desc&limit=100")||[];if(!silent&&page==="alerts")render()}catch(e){if(!silent)toast(e.message)}}
+async function loadNotifications(silent=false){if(!profile||profile.role==="pending")return;try{notifications=await api("/rest/v1/ops_notifications?select=id,ticket_id,kind,title,body,priority,read_at,created_at,data&order=created_at.desc&limit=100")||[];notifyNewNotifications();if(!silent&&page==="alerts")render()}catch(e){if(!silent)toast(e.message)}}
+function notifyNewNotifications(){let seen=[];try{seen=JSON.parse(localStorage.getItem("hanokops_notified_ids")||"[]")}catch{}const set=new Set(seen);let changed=false;for(const n of notifications){if(!n.read_at&&!set.has(n.id)){if(window.AndroidApp&&typeof window.AndroidApp.notify==="function"){try{window.AndroidApp.notify(n.title,n.body||"Hanok Ops alert")}catch{}}set.add(n.id);changed=true}}if(changed)localStorage.setItem("hanokops_notified_ids",JSON.stringify(Array.from(set).slice(-300)))}
 async function refreshAll(){await Promise.all([loadTickets(true),loadNotifications(true)]);if(["home","tickets","alerts","stores"].includes(page))render()}
 async function loadEvents(id){return await api("/rest/v1/ops_ticket_events?ticket_id=eq."+id+"&select=id,event_type,message,details,created_at&order=created_at.asc")||[]}
 async function loadComments(id){return await api("/rest/v1/ops_ticket_comments?ticket_id=eq."+id+"&select=id,author_id,body,created_at&order=created_at.asc")||[]}
@@ -95,8 +96,8 @@ function showLogin(){
   app.innerHTML='<div class="login"><div><div class="loginLogo">Hanok Ops</div><div class="loginTag">ONE GROUP · EVERY STORE · ALWAYS IN CONTROL</div></div><div class="loginBox"><h2>Sign in</h2><p>Use your Hanok Ops account to continue.</p><input id="email" type="email" autocomplete="email" placeholder="Email"><input id="password" type="password" autocomplete="current-password" placeholder="Password"><div id="loginErr" class="error"></div><button class="primary" onclick="signIn()">Sign in</button><button class="secondary" onclick="signUp()">Create account</button></div><div style="font-size:10px;color:#82929f;text-align:center">Hanok Group · Operations System · v0.3</div></div>'
 }
 
-function nav(){
-  return '<nav class="nav">'+[["⌂","Home","home"],["▤","Tickets","tickets"],["▦","Stores","stores"],["♢","Alerts","alerts"],["◉","Profile","profile"]].map(x=>'<button class="'+(page===x[2]?"active":"")+'" onclick="go(\''+x[2]+'\')"><b>'+x[0]+'</b>'+x[1]+'</button>').join("")+'</nav>'
+function nav(){const unread=notifications.filter(n=>!n.read_at).length;
+  return '<nav class="nav">'+[["⌂","Home","home"],["▤","Tickets","tickets"],["▦","Stores","stores"],["♢",unread?"Alerts "+unread:"Alerts","alerts"],["◉","Profile","profile"]].map(x=>'<button class="'+(page===x[2]?"active":"")+'" onclick="go(\''+x[2]+'\')"><b>'+x[0]+'</b>'+x[1]+'</button>').join("")+'</nav>'
 }
 function ticketCard(t){
   const s=storeFor(t.store_id), urgent=t.priority==="urgent";
