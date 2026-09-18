@@ -4,16 +4,22 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.webkit.MimeTypeMap;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import java.io.InputStream;
 
 public class MainActivity extends Activity {
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
     private static final int FILE_REQUEST = 1001;
+    private static final String LOCAL_HOST = "hanokops.local";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,13 +32,32 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setAllowFileAccess(true);
+        s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
 
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if (LOCAL_HOST.equals(uri.getHost())) {
+                    String path = uri.getPath();
+                    if (path == null || path.equals("/") || path.equals("/index.html")) path = "/index.html";
+                    if (path.startsWith("/")) path = path.substring(1);
+                    try {
+                        InputStream stream = getAssets().open(path);
+                        String ext = MimeTypeMap.getFileExtensionFromUrl(path);
+                        String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+                        if (mime == null) mime = path.endsWith(".html") ? "text/html" : "application/octet-stream";
+                        return new WebResourceResponse(mime, "UTF-8", stream);
+                    } catch (Exception ignored) {}
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+        });
+
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
@@ -51,7 +76,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (savedInstanceState == null) webView.loadUrl("file:///android_asset/index.html");
+        if (savedInstanceState == null) webView.loadUrl("https://" + LOCAL_HOST + "/index.html");
         else webView.restoreState(savedInstanceState);
     }
 
